@@ -1,0 +1,41 @@
+{
+  "name": "trip-split",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "pnpm run --parallel \"/^dev:/\"",
+    "dev:client": "vite",
+    "dev:server": "node --watch src/server/main.ts",
+    "build": "vite build",
+    "start": "node src/server/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "hono": "^4.13.13",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "oxfmt": "^0.74.0",
+    "oxlint": "^1.89.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -1,0 +1,712 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-23T12:00:00Z",
+  "title": "Design System: Trip Split",
+  "extensions": {
+    "colorMeta": {
+      "action": {
+        "role": "primary",
+        "displayName": "Action Orange",
+        "canonical": "#d43f1c",
+        "oklch": "oklch(58.2% 0.191 34)",
+        "tonalRamp": [
+          "#220000",
+          "#4d0800",
+          "#7f1a01",
+          "#b33011",
+          "#e5502e",
+          "#f98b71",
+          "#fec0b1",
+          "#fee9e4"
+        ]
+      },
+      "action-deep": {
+        "role": "primary",
+        "displayName": "Action Orange Deep",
+        "canonical": "#bb3516",
+        "oklch": "oklch(52.9% 0.176 34)",
+        "tonalRamp": [
+          "#220000",
+          "#4d0600",
+          "#801800",
+          "#b42e0d",
+          "#df573a",
+          "#fa8a70",
+          "#fec0b1",
+          "#fee9e4"
+        ]
+      },
+      "person-0": {
+        "role": "secondary",
+        "displayName": "Mustard",
+        "canonical": "#f2c14e",
+        "oklch": "oklch(83.4% 0.141 85)",
+        "tonalRamp": [
+          "#130900",
+          "#322401",
+          "#574109",
+          "#816105",
+          "#ac820a",
+          "#d6a62c",
+          "#fbc957",
+          "#feedca"
+        ]
+      },
+      "person-1": {
+        "role": "secondary",
+        "displayName": "Sky",
+        "canonical": "#86b6d9",
+        "oklch": "oklch(75.5% 0.072 241)",
+        "tonalRamp": [
+          "#000d1d",
+          "#002943",
+          "#1b4968",
+          "#3d6b8b",
+          "#608fb1",
+          "#85b4d7",
+          "#a7d8fc",
+          "#e0f1fe"
+        ]
+      },
+      "person-2": {
+        "role": "secondary",
+        "displayName": "Sage",
+        "canonical": "#9fcf8f",
+        "oklch": "oklch(80.4% 0.101 138)",
+        "tonalRamp": [
+          "#001200",
+          "#043100",
+          "#265115",
+          "#487338",
+          "#6a985a",
+          "#8ebd7e",
+          "#b0e1a0",
+          "#cdffbd"
+        ]
+      },
+      "person-3": {
+        "role": "secondary",
+        "displayName": "Rose",
+        "canonical": "#f2a0a0",
+        "oklch": "oklch(78.7% 0.098 19)",
+        "tonalRamp": [
+          "#280000",
+          "#4c0711",
+          "#702b2f",
+          "#964d4f",
+          "#bd7071",
+          "#e59595",
+          "#ffb7b7",
+          "#ffd4d4"
+        ]
+      },
+      "person-4": {
+        "role": "secondary",
+        "displayName": "Lavender",
+        "canonical": "#b9a6e3",
+        "oklch": "oklch(76.3% 0.088 299)",
+        "tonalRamp": [
+          "#12002a",
+          "#2d194b",
+          "#4c396d",
+          "#6d5a92",
+          "#907db8",
+          "#b5a2df",
+          "#d8c5ff",
+          "#f6e2ff"
+        ]
+      },
+      "person-5": {
+        "role": "secondary",
+        "displayName": "Mint",
+        "canonical": "#7fcfc4",
+        "oklch": "oklch(80.0% 0.081 185)",
+        "tonalRamp": [
+          "#00140f",
+          "#00322b",
+          "#00524a",
+          "#1e756c",
+          "#49998f",
+          "#6fbfb4",
+          "#92e3d7",
+          "#b0fff5"
+        ]
+      },
+      "person-6": {
+        "role": "secondary",
+        "displayName": "Apricot",
+        "canonical": "#f5ad7e",
+        "oklch": "oklch(80.6% 0.105 54)",
+        "tonalRamp": [
+          "#270000",
+          "#4a0f00",
+          "#6e3100",
+          "#945324",
+          "#ba7749",
+          "#e29b6d",
+          "#ffbe8f",
+          "#ffdcab"
+        ]
+      },
+      "person-7": {
+        "role": "secondary",
+        "displayName": "Oat",
+        "canonical": "#cdb88c",
+        "oklch": "oklch(79.0% 0.063 85)",
+        "tonalRamp": [
+          "#170700",
+          "#342300",
+          "#544218",
+          "#77633a",
+          "#9b875c",
+          "#c0ab80",
+          "#e4cfa2",
+          "#ffecbf"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#2a2420",
+        "oklch": "oklch(26.6% 0.012 56)",
+        "tonalRamp": [
+          "#0f0a07",
+          "#2b2521",
+          "#4a443f",
+          "#6c6460",
+          "#8f8783",
+          "#b4aca7",
+          "#d7cfca",
+          "#f5ede7"
+        ]
+      },
+      "soft": {
+        "role": "neutral",
+        "displayName": "Soft Text",
+        "canonical": "#655a50",
+        "oklch": "oklch(47.5% 0.021 65)",
+        "tonalRamp": [
+          "#110903",
+          "#2e241c",
+          "#4d4339",
+          "#6f645a",
+          "#93877c",
+          "#b8aba0",
+          "#dbcec3",
+          "#f9ece0"
+        ]
+      },
+      "placeholder": {
+        "role": "neutral",
+        "displayName": "Placeholder",
+        "canonical": "#7a6e63",
+        "oklch": "oklch(54.6% 0.023 65)",
+        "tonalRamp": [
+          "#120903",
+          "#2e241b",
+          "#4e4339",
+          "#6f6459",
+          "#93877b",
+          "#b8ab9f",
+          "#dccec2",
+          "#faecdf"
+        ]
+      },
+      "placeholder-amount": {
+        "role": "neutral",
+        "displayName": "Amount Placeholder",
+        "canonical": "#8a7d71",
+        "oklch": "oklch(59.8% 0.024 65)",
+        "tonalRamp": [
+          "#120902",
+          "#2f241a",
+          "#4e4338",
+          "#706458",
+          "#94877a",
+          "#b9ab9f",
+          "#dccec1",
+          "#faecde"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Warm Sand Ground",
+        "canonical": "#f6efe7",
+        "oklch": "oklch(95.5% 0.013 71)",
+        "tonalRamp": [
+          "#0f0a06",
+          "#2b2520",
+          "#4a443e",
+          "#6b655e",
+          "#8e8881",
+          "#b3ada5",
+          "#d7d0c8",
+          "#f4ede5"
+        ]
+      },
+      "card": {
+        "role": "neutral",
+        "displayName": "Card White",
+        "canonical": "#ffffff",
+        "oklch": "oklch(100.0% 0.000 90)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#262626",
+          "#454545",
+          "#666666",
+          "#898989",
+          "#aeaeae",
+          "#d1d1d1",
+          "#eeeeee"
+        ]
+      },
+      "white": {
+        "role": "neutral",
+        "displayName": "White",
+        "canonical": "#ffffff",
+        "oklch": "oklch(100.0% 0.000 90)",
+        "tonalRamp": [
+          "#0b0b0b",
+          "#262626",
+          "#454545",
+          "#666666",
+          "#898989",
+          "#aeaeae",
+          "#d1d1d1",
+          "#eeeeee"
+        ]
+      },
+      "sand": {
+        "role": "neutral",
+        "displayName": "Sand",
+        "canonical": "#eadfd2",
+        "oklch": "oklch(90.9% 0.021 72)",
+        "tonalRamp": [
+          "#110a03",
+          "#2d251b",
+          "#4c4339",
+          "#6e6459",
+          "#91877b",
+          "#b7aca0",
+          "#dacfc2",
+          "#f8eddf"
+        ]
+      },
+      "sand-hover": {
+        "role": "neutral",
+        "displayName": "Sand Hover",
+        "canonical": "#e0d2c2",
+        "oklch": "oklch(87.1% 0.027 71)",
+        "tonalRamp": [
+          "#120901",
+          "#2f2418",
+          "#4e4336",
+          "#706456",
+          "#948778",
+          "#b9ac9c",
+          "#dccfbf",
+          "#faecdc"
+        ]
+      },
+      "sand-deep": {
+        "role": "neutral",
+        "displayName": "Sand Deep",
+        "canonical": "#d6c7b6",
+        "oklch": "oklch(83.7% 0.029 71)",
+        "tonalRamp": [
+          "#130901",
+          "#2f2417",
+          "#4f4334",
+          "#716454",
+          "#958777",
+          "#baab9b",
+          "#ddcebd",
+          "#fbecda"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#efe6db",
+        "oklch": "oklch(92.9% 0.018 73)",
+        "tonalRamp": [
+          "#100a04",
+          "#2c251d",
+          "#4b443b",
+          "#6c655b",
+          "#90887e",
+          "#b5aca2",
+          "#d8cfc5",
+          "#f6ede2"
+        ]
+      },
+      "row-hover": {
+        "role": "neutral",
+        "displayName": "Row Hover",
+        "canonical": "#fbf8f4",
+        "oklch": "oklch(98.0% 0.006 75)",
+        "tonalRamp": [
+          "#0d0b08",
+          "#282623",
+          "#474541",
+          "#686662",
+          "#8b8985",
+          "#b0adaa",
+          "#d3d0cd",
+          "#f1eeea"
+        ]
+      },
+      "disabled": {
+        "role": "neutral",
+        "displayName": "Disabled",
+        "canonical": "#cfc3b6",
+        "oklch": "oklch(82.3% 0.022 70)",
+        "tonalRamp": [
+          "#110903",
+          "#2e251a",
+          "#4d4338",
+          "#6f6458",
+          "#92877b",
+          "#b7ac9f",
+          "#dbcfc2",
+          "#f9ecdf"
+        ]
+      },
+      "quiet-bar": {
+        "role": "neutral",
+        "displayName": "Quiet Bar",
+        "canonical": "#c9b9a7",
+        "oklch": "oklch(79.4% 0.031 71)",
+        "tonalRamp": [
+          "#130900",
+          "#302415",
+          "#504233",
+          "#726353",
+          "#958675",
+          "#bbab99",
+          "#decebc",
+          "#fcecd9"
+        ]
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Danger Brick",
+        "canonical": "#b8321a",
+        "oklch": "oklch(52.1% 0.175 32)",
+        "tonalRamp": [
+          "#220000",
+          "#4d0600",
+          "#801804",
+          "#b42e16",
+          "#de573e",
+          "#fa8a73",
+          "#fec0b2",
+          "#fee9e5"
+        ]
+      },
+      "danger-wash": {
+        "role": "semantic",
+        "displayName": "Danger Wash",
+        "canonical": "#fbe9e4",
+        "oklch": "oklch(94.7% 0.021 36)",
+        "tonalRamp": [
+          "#130806",
+          "#30231f",
+          "#4f413d",
+          "#71625e",
+          "#958581",
+          "#bbaaa5",
+          "#decdc8",
+          "#fceae5"
+        ]
+      },
+      "synced": {
+        "role": "semantic",
+        "displayName": "Synced Green",
+        "canonical": "#3f8f5a",
+        "oklch": "oklch(58.6% 0.113 152)",
+        "tonalRamp": [
+          "#001103",
+          "#032f15",
+          "#005428",
+          "#257845",
+          "#4d9d67",
+          "#73c38b",
+          "#96e7ad",
+          "#cafed7"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The balance sentence only."
+      },
+      "amount": {
+        "displayName": "Amount",
+        "purpose": "Amount input in the entry and settle sheets."
+      },
+      "4xl": {
+        "displayName": "4xl",
+        "purpose": "Gate titles, stat values, currency symbol beside the amount."
+      },
+      "3xl": {
+        "displayName": "3xl",
+        "purpose": "Trip name, sheet titles."
+      },
+      "2xl": {
+        "displayName": "2xl",
+        "purpose": "Empty-state headings, big avatar initial."
+      },
+      "xl": {
+        "displayName": "xl",
+        "purpose": "Primary and Add expense labels."
+      },
+      "lg": {
+        "displayName": "lg",
+        "purpose": "Row amounts, stat section heads, inputs (600)."
+      },
+      "base": {
+        "displayName": "Base",
+        "purpose": "Default reading text, row titles (700), tabular numerals."
+      },
+      "md": {
+        "displayName": "md",
+        "purpose": "Chips, segments, secondary button, errors, desktop tabs."
+      },
+      "sm": {
+        "displayName": "sm",
+        "purpose": "Field labels and legends, day guide, links, hints."
+      },
+      "xs": {
+        "displayName": "xs",
+        "purpose": "Row metadata, local amounts, mobile tabs, sync pill."
+      },
+      "2xs": {
+        "displayName": "2xs",
+        "purpose": "The Not synced chip only."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card",
+        "value": "0 1px 2px rgb(42 36 32 / 0.06), 0 6px 16px rgb(42 36 32 / 0.05)",
+        "purpose": "Every card, the amount field, stats sections."
+      },
+      {
+        "name": "fab",
+        "value": "0 8px 20px rgb(212 63 28 / 0.32)",
+        "purpose": "Floating mobile Add expense button only."
+      },
+      {
+        "name": "dock",
+        "value": "0 -4px 16px rgb(42 36 32 / 0.06)",
+        "purpose": "Mobile tab bar lift."
+      },
+      {
+        "name": "lift",
+        "value": "0 1px 3px rgb(42 36 32 / 0.15)",
+        "purpose": "Selected segment and active desktop tab."
+      },
+      {
+        "name": "focus",
+        "value": "0 0 0 4px rgb(42 36 32 / 0.08)",
+        "purpose": "Text inputs on focus, with ink border."
+      },
+      {
+        "name": "inset-stroke",
+        "value": "inset 0 0 0 1.5px #eadfd2",
+        "purpose": "Drawn border of chips and outline/danger buttons."
+      },
+      {
+        "name": "inset-stroke-deep",
+        "value": "inset 0 0 0 1.5px #d6c7b6",
+        "purpose": "Chip hover stroke."
+      },
+      {
+        "name": "inset-hairline",
+        "value": "inset 0 0 0 1px rgb(42 36 32 / 0.15)",
+        "purpose": "Split badge edge (with a 2px card ring on tiles)."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-spring",
+        "value": "cubic-bezier(0.2, 0.9, 0.3, 1.15)",
+        "purpose": "Press scale on buttons and gate tiles (0.95 to 0.97), 180 to 200ms."
+      },
+      {
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Sheet entrance (animate-sheet-in: 280ms, 48px rise and fade), budget bar width (500ms)."
+      },
+      {
+        "name": "state",
+        "value": "150ms",
+        "purpose": "Colour, background and border transitions."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "none",
+        "purpose": "All animation and transition removed under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "base",
+        "value": "0",
+        "purpose": "Single column, max 640px."
+      },
+      {
+        "name": "wide",
+        "value": "60rem",
+        "purpose": "Two columns in 1120px, header pill tabs, centred 540px sheets."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The orange pill for the main action of a form or sheet.",
+      "html": "<button class=\"ds-primary\">Save expense</button>",
+      "css": ":host{--color-action:#d43f1c;--color-action-deep:#bb3516;--color-person-0:#f2c14e;--color-person-1:#86b6d9;--color-ink:#2a2420;--color-soft:#655a50;--color-placeholder:#7a6e63;--color-placeholder-amount:#8a7d71;--color-ground:#f6efe7;--color-card:#ffffff;--color-white:#ffffff;--color-sand:#eadfd2;--color-sand-hover:#e0d2c2;--color-sand-deep:#d6c7b6;--color-hairline:#efe6db;--color-row-hover:#fbf8f4;--color-disabled:#cfc3b6;--color-quiet-bar:#c9b9a7;--color-danger:#b8321a;--color-danger-wash:#fbe9e4;--color-synced:#3f8f5a;--shadow-card:0 1px 2px rgb(42 36 32 / 0.06),0 6px 16px rgb(42 36 32 / 0.05);--ease-spring:cubic-bezier(0.2,0.9,0.3,1.15);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--color-ink)} :focus-visible{outline:2.5px solid var(--color-ink);outline-offset:2px} .ds-primary{font:inherit;border:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:54px;padding:0 24px;border-radius:999px;background:var(--color-action);color:#fff;font-weight:800;font-size:18px;transition:transform 200ms var(--ease-spring),background 150ms} .ds-primary:hover{background:var(--color-action-deep)} .ds-primary:active{transform:scale(0.97)}"
+    },
+    {
+      "name": "Add Expense",
+      "kind": "button",
+      "refersTo": "button-add-expense",
+      "description": "Floating primary action above the mobile tab bar.",
+      "html": "<button class=\"ds-add\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\"/></svg> Add expense</button>",
+      "css": ":host{--color-action:#d43f1c;--color-action-deep:#bb3516;--color-person-0:#f2c14e;--color-person-1:#86b6d9;--color-ink:#2a2420;--color-soft:#655a50;--color-placeholder:#7a6e63;--color-placeholder-amount:#8a7d71;--color-ground:#f6efe7;--color-card:#ffffff;--color-white:#ffffff;--color-sand:#eadfd2;--color-sand-hover:#e0d2c2;--color-sand-deep:#d6c7b6;--color-hairline:#efe6db;--color-row-hover:#fbf8f4;--color-disabled:#cfc3b6;--color-quiet-bar:#c9b9a7;--color-danger:#b8321a;--color-danger-wash:#fbe9e4;--color-synced:#3f8f5a;--shadow-card:0 1px 2px rgb(42 36 32 / 0.06),0 6px 16px rgb(42 36 32 / 0.05);--ease-spring:cubic-bezier(0.2,0.9,0.3,1.15);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--color-ink)} :focus-visible{outline:2.5px solid var(--color-ink);outline-offset:2px} .ds-add{font:inherit;border:0;cursor:pointer;display:inline-flex;align-items:center;gap:8px;height:56px;padding:0 24px 0 18px;border-radius:28px;background:var(--color-action);color:#fff;font-weight:800;font-size:18px;box-shadow:0 8px 20px rgb(212 63 28 / 0.32);transition:transform 200ms var(--ease-spring),background 150ms} .ds-add:hover{background:var(--color-action-deep)} .ds-add:active{transform:scale(0.95)}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Secondary action such as Settle up.",
+      "html": "<button class=\"ds-settle\">Settle up</button>",
+      "css": ":host{--color-action:#d43f1c;--color-action-deep:#bb3516;--color-person-0:#f2c14e;--color-person-1:#86b6d9;--color-ink:#2a2420;--color-soft:#655a50;--color-placeholder:#7a6e63;--color-placeholder-amount:#8a7d71;--color-ground:#f6efe7;--color-card:#ffffff;--color-white:#ffffff;--color-sand:#eadfd2;--color-sand-hover:#e0d2c2;--color-sand-deep:#d6c7b6;--color-hairline:#efe6db;--color-row-hover:#fbf8f4;--color-disabled:#cfc3b6;--color-quiet-bar:#c9b9a7;--color-danger:#b8321a;--color-danger-wash:#fbe9e4;--color-synced:#3f8f5a;--shadow-card:0 1px 2px rgb(42 36 32 / 0.06),0 6px 16px rgb(42 36 32 / 0.05);--ease-spring:cubic-bezier(0.2,0.9,0.3,1.15);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--color-ink)} :focus-visible{outline:2.5px solid var(--color-ink);outline-offset:2px} .ds-settle{font:inherit;border:0;cursor:pointer;min-height:44px;padding:0 18px;border-radius:999px;background:var(--color-sand);color:var(--color-ink);font-weight:800;font-size:15px;transition:transform 180ms var(--ease-spring),background 150ms} .ds-settle:hover{background:var(--color-sand-hover)} .ds-settle:active{transform:scale(0.95)}"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Quiet secondary action with an inset sand stroke.",
+      "html": "<button class=\"ds-ghost\">Cancel</button>",
+      "css": ":host{--color-action:#d43f1c;--color-action-deep:#bb3516;--color-person-0:#f2c14e;--color-person-1:#86b6d9;--color-ink:#2a2420;--color-soft:#655a50;--color-placeholder:#7a6e63;--color-placeholder-amount:#8a7d71;--color-ground:#f6efe7;--color-card:#ffffff;--color-white:#ffffff;--color-sand:#eadfd2;--color-sand-hover:#e0d2c2;--color-sand-deep:#d6c7b6;--color-hairline:#efe6db;--color-row-hover:#fbf8f4;--color-disabled:#cfc3b6;--color-quiet-bar:#c9b9a7;--color-danger:#b8321a;--color-danger-wash:#fbe9e4;--color-synced:#3f8f5a;--shadow-card:0 1px 2px rgb(42 36 32 / 0.06),0 6px 16px rgb(42 36 32 / 0.05);--ease-spring:cubic-bezier(0.2,0.9,0.3,1.15);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--color-ink)} :focus-visible{outline:2.5px solid var(--color-ink);outline-offset:2px} .ds-ghost{font:inherit;border:0;cursor:pointer;min-height:54px;padding:0 18px;border-radius:999px;background:transparent;color:var(--color-ink);font-weight:800;box-shadow:inset 0 0 0 1.5px var(--color-sand);transition:background 150ms} .ds-ghost:hover{background:var(--color-hairline)}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Labelled 50px text input.",
+      "html": "<label class=\"ds-field\"><span>What was it?</span><input placeholder=\"Food &amp; drink\"></label>",
+      "css": ":host{--color-action:#d43f1c;--color-action-deep:#bb3516;--color-person-0:#f2c14e;--color-person-1:#86b6d9;--color-ink:#2a2420;--color-soft:#655a50;--color-placeholder:#7a6e63;--color-placeholder-amount:#8a7d71;--color-ground:#f6efe7;--color-card:#ffffff;--color-white:#ffffff;--color-sand:#eadfd2;--color-sand-hover:#e0d2c2;--color-sand-deep:#d6c7b6;--color-hairline:#efe6db;--color-row-hover:#fbf8f4;--color-disabled:#cfc3b6;--color-quiet-bar:#c9b9a7;--color-danger:#b8321a;--color-danger-wash:#fbe9e4;--color-synced:#3f8f5a;--shadow-card:0 1px 2px rgb(42 36 32 / 0.06),0 6px 16px rgb(42 36 32 / 0.05);--ease-spring:cubic-bezier(0.2,0.9,0.3,1.15);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--color-ink)} .ds-field{display:flex;flex-direction:column;gap:6px} .ds-field span{font-size:14px;font-weight:700;color:var(--color-soft)} .ds-field input{font:inherit;height:50px;padding:0 14px;border:1.5px solid var(--color-sand);border-radius:14px;background:var(--color-card);color:var(--color-ink);font-size:17px;font-weight:600;transition:border-color 150ms,box-shadow 150ms} .ds-field input:hover{border-color:var(--color-sand-deep)} .ds-field input:focus{outline:none;border-color:var(--color-ink);box-shadow:0 0 0 4px rgb(42 36 32 / 0.08)} .ds-field input::placeholder{color:var(--color-placeholder);font-weight:500}"
+    },
+    {
+      "name": "Category Chips",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Toggle pill; selected inverts to ink, a person chip fills with their colour.",
+      "html": "<div class=\"ds-chips\"><button class=\"ds-chip\" aria-pressed=\"true\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 0-3 2-3 6s1 4 3 4v8\"/></svg> Food &amp; drink</button><button class=\"ds-chip\" aria-pressed=\"false\">Transport</button><button class=\"ds-chip\" aria-pressed=\"true\" style=\"--who:var(--color-person-2)\">Kim</button></div>",
+      "css": ":host{--color-action:#d43f1c;--color-action-deep:#bb3516;--color-person-0:#f2c14e;--color-person-1:#86b6d9;--color-person-2:#9fcf8f;--color-ink:#2a2420;--color-soft:#655a50;--color-placeholder:#7a6e63;--color-placeholder-amount:#8a7d71;--color-ground:#f6efe7;--color-card:#ffffff;--color-white:#ffffff;--color-sand:#eadfd2;--color-sand-hover:#e0d2c2;--color-sand-deep:#d6c7b6;--color-hairline:#efe6db;--color-row-hover:#fbf8f4;--color-disabled:#cfc3b6;--color-quiet-bar:#c9b9a7;--color-danger:#b8321a;--color-danger-wash:#fbe9e4;--color-synced:#3f8f5a;--shadow-card:0 1px 2px rgb(42 36 32 / 0.06),0 6px 16px rgb(42 36 32 / 0.05);--ease-spring:cubic-bezier(0.2,0.9,0.3,1.15);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--color-ink)} :focus-visible{outline:2.5px solid var(--color-ink);outline-offset:2px} .ds-chips{display:flex;flex-wrap:wrap;gap:8px} .ds-chip{font:inherit;border:0;cursor:pointer;display:inline-flex;align-items:center;gap:6px;min-height:42px;padding:0 14px;border-radius:999px;background:var(--color-card);color:var(--color-ink);box-shadow:inset 0 0 0 1.5px var(--color-sand);font-size:15px;font-weight:700;transition:background 150ms,color 150ms,box-shadow 150ms} .ds-chip:hover{box-shadow:inset 0 0 0 1.5px var(--color-sand-deep)} .ds-chip[aria-pressed=\"true\"]{background:var(--who,var(--color-ink));color:var(--on-who,#fff);box-shadow:none} .ds-chip[style*=\"--who\"]{--on-who:var(--color-ink)}"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented",
+      "description": "Sand track with a lifted white selection; payer segments fill with the person colour.",
+      "html": "<div class=\"ds-seg\" role=\"radiogroup\"><button role=\"radio\" aria-checked=\"true\" class=\"ds-who\" style=\"--who:var(--color-person-0)\">Alex</button><button role=\"radio\" aria-checked=\"false\">Sam</button></div>",
+      "css": ":host{--color-action:#d43f1c;--color-action-deep:#bb3516;--color-person-0:#f2c14e;--color-person-1:#86b6d9;--color-ink:#2a2420;--color-soft:#655a50;--color-placeholder:#7a6e63;--color-placeholder-amount:#8a7d71;--color-ground:#f6efe7;--color-card:#ffffff;--color-white:#ffffff;--color-sand:#eadfd2;--color-sand-hover:#e0d2c2;--color-sand-deep:#d6c7b6;--color-hairline:#efe6db;--color-row-hover:#fbf8f4;--color-disabled:#cfc3b6;--color-quiet-bar:#c9b9a7;--color-danger:#b8321a;--color-danger-wash:#fbe9e4;--color-synced:#3f8f5a;--shadow-card:0 1px 2px rgb(42 36 32 / 0.06),0 6px 16px rgb(42 36 32 / 0.05);--ease-spring:cubic-bezier(0.2,0.9,0.3,1.15);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--color-ink)} :focus-visible{outline:2.5px solid var(--color-ink);outline-offset:2px} .ds-seg{display:flex;gap:2px;padding:3px;border-radius:999px;background:var(--color-sand)} .ds-seg button{font:inherit;border:0;cursor:pointer;flex:1;min-height:42px;padding:0 10px;border-radius:999px;background:transparent;font-weight:700;font-size:15px;color:var(--color-soft);transition:background 150ms,color 150ms,box-shadow 150ms} .ds-seg button:hover{color:var(--color-ink)} .ds-seg button[aria-checked=\"true\"]{background:var(--color-card);color:var(--color-ink);box-shadow:0 1px 3px rgb(42 36 32 / 0.15)} .ds-seg .ds-who[aria-checked=\"true\"]{background:var(--who)}"
+    },
+    {
+      "name": "Mobile Tab Bar",
+      "kind": "nav",
+      "refersTo": "tab-bar",
+      "description": "White bottom dock; active tab in action orange.",
+      "html": "<nav class=\"ds-dock\"><button class=\"ds-tab\" aria-current=\"page\"><svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\"><path d=\"M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01\"/></svg>Expenses</button><button class=\"ds-tab\"><svg width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\"><path d=\"M4 20V10M10 20V4M16 20v-7M22 20H2\"/></svg>Stats</button></nav>",
+      "css": ":host{--color-action:#d43f1c;--color-action-deep:#bb3516;--color-person-0:#f2c14e;--color-person-1:#86b6d9;--color-ink:#2a2420;--color-soft:#655a50;--color-placeholder:#7a6e63;--color-placeholder-amount:#8a7d71;--color-ground:#f6efe7;--color-card:#ffffff;--color-white:#ffffff;--color-sand:#eadfd2;--color-sand-hover:#e0d2c2;--color-sand-deep:#d6c7b6;--color-hairline:#efe6db;--color-row-hover:#fbf8f4;--color-disabled:#cfc3b6;--color-quiet-bar:#c9b9a7;--color-danger:#b8321a;--color-danger-wash:#fbe9e4;--color-synced:#3f8f5a;--shadow-card:0 1px 2px rgb(42 36 32 / 0.06),0 6px 16px rgb(42 36 32 / 0.05);--ease-spring:cubic-bezier(0.2,0.9,0.3,1.15);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--color-ink)} :focus-visible{outline:2.5px solid var(--color-ink);outline-offset:2px} .ds-dock{display:flex;justify-content:center;padding:8px 16px 0;background:var(--color-card);border-radius:24px 24px 0 0;box-shadow:0 -4px 16px rgb(42 36 32 / 0.06)} .ds-tab{font:inherit;border:0;cursor:pointer;flex:1;max-width:160px;height:68px;padding-bottom:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;font-size:13px;font-weight:700;color:var(--color-soft);transition:color 150ms} .ds-tab:hover{color:var(--color-ink)} .ds-tab[aria-current=\"page\"]{color:var(--color-action)}"
+    },
+    {
+      "name": "Expense Row with Split Badge",
+      "kind": "custom",
+      "refersTo": "category-tile",
+      "description": "Signature: category tile carrying a pie of who owns the cost, one slice per person.",
+      "html": "<div class=\"ds-card\"><button class=\"ds-row\"><span class=\"ds-tile\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M7 3v8M5 3v5a2 2 0 0 0 4 0V3M7 11v10M17 3c-2 0-3 2-3 6s1 4 3 4v8\"/></svg><span class=\"ds-badge\" style=\"--share:50%\"></span></span><span class=\"ds-main\"><span class=\"ds-title\">Gwangjang Market</span><span class=\"ds-meta\">Alex paid · split 50/50</span></span><span class=\"ds-amt\"><b>135 kr</b><small>₩18 000</small></span></button></div>",
+      "css": ":host{--color-action:#d43f1c;--color-action-deep:#bb3516;--color-person-0:#f2c14e;--color-person-1:#86b6d9;--color-ink:#2a2420;--color-soft:#655a50;--color-placeholder:#7a6e63;--color-placeholder-amount:#8a7d71;--color-ground:#f6efe7;--color-card:#ffffff;--color-white:#ffffff;--color-sand:#eadfd2;--color-sand-hover:#e0d2c2;--color-sand-deep:#d6c7b6;--color-hairline:#efe6db;--color-row-hover:#fbf8f4;--color-disabled:#cfc3b6;--color-quiet-bar:#c9b9a7;--color-danger:#b8321a;--color-danger-wash:#fbe9e4;--color-synced:#3f8f5a;--shadow-card:0 1px 2px rgb(42 36 32 / 0.06),0 6px 16px rgb(42 36 32 / 0.05);--ease-spring:cubic-bezier(0.2,0.9,0.3,1.15);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--color-ink)} :focus-visible{outline:2.5px solid var(--color-ink);outline-offset:2px} .ds-card{background:var(--color-card);border-radius:20px;box-shadow:var(--shadow-card);overflow:hidden} .ds-row{font:inherit;border:0;cursor:pointer;width:100%;display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:68px;padding:10px 16px;text-align:left;background:none;color:var(--color-ink);transition:background 150ms} .ds-row:hover{background:var(--color-row-hover)} .ds-row:active{background:var(--color-hairline)} .ds-tile{position:relative;display:grid;place-items:center;width:44px;height:44px;border-radius:14px;background:var(--color-ground)} .ds-badge{position:absolute;right:-4px;bottom:-4px;width:18px;height:18px;border-radius:50%;background:conic-gradient(var(--color-person-0) 0 var(--share),var(--color-person-1) 0);box-shadow:0 0 0 2px var(--color-card),inset 0 0 0 1px rgb(42 36 32 / 0.15)} .ds-main{display:flex;flex-direction:column;gap:2px;min-width:0} .ds-title{font-size:16px;font-weight:700;line-height:1.25} .ds-meta{font-size:13px;font-weight:600;color:var(--color-soft)} .ds-amt{display:flex;flex-direction:column;align-items:flex-end;gap:1px} .ds-amt b{font-size:17px;font-weight:800} .ds-amt small{font-size:13px;font-weight:600;color:var(--color-soft)}"
+    },
+    {
+      "name": "Sync Pill",
+      "kind": "chip",
+      "refersTo": "sync-pill",
+      "description": "Sync status in the top bar; inverts to ink when offline.",
+      "html": "<span class=\"ds-sync ds-ok\">Synced</span> <span class=\"ds-sync ds-off\">Offline</span>",
+      "css": ":host{--color-action:#d43f1c;--color-action-deep:#bb3516;--color-person-0:#f2c14e;--color-person-1:#86b6d9;--color-ink:#2a2420;--color-soft:#655a50;--color-placeholder:#7a6e63;--color-placeholder-amount:#8a7d71;--color-ground:#f6efe7;--color-card:#ffffff;--color-white:#ffffff;--color-sand:#eadfd2;--color-sand-hover:#e0d2c2;--color-sand-deep:#d6c7b6;--color-hairline:#efe6db;--color-row-hover:#fbf8f4;--color-disabled:#cfc3b6;--color-quiet-bar:#c9b9a7;--color-danger:#b8321a;--color-danger-wash:#fbe9e4;--color-synced:#3f8f5a;--shadow-card:0 1px 2px rgb(42 36 32 / 0.06),0 6px 16px rgb(42 36 32 / 0.05);--ease-spring:cubic-bezier(0.2,0.9,0.3,1.15);font-family:Nunito,ui-rounded,system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--color-ink)} .ds-sync{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;background:var(--color-sand);color:var(--color-ink);font-size:13px;font-weight:700} .ds-ok::before{content:\"\";width:7px;height:7px;border-radius:50%;background:var(--color-synced)} .ds-off{background:var(--color-ink);color:#fff}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Pressable Ember",
+    "overview": "A warm, friendly expense splitter for couples and small groups on the move. The ground is warm sand, content sits on soft white cards, and the one bright colour in the world, action orange, always marks something you can press. Everything else is ink, soft brown text, and sand. Each traveller owns a colour from a soft eight-colour person palette, and those colours carry every statement about who paid and who it was for.\n\nDensity is that of a consumer phone app used one-handed in daylight: 44px minimum targets, heavy rounded type, big money numbers, short rows. The world refuses the category default of a grey list with a green summary card, and it refuses themed costume (no travel stamps, maps, or passport motifs). Trust comes from legibility: each entry shows payer, split, and sync state without opening it.\n\nOn desktop the same world widens into two columns, list left and stats right, with the tab bar lifting into a pill in the header row.",
+    "keyCharacteristics": [
+      "Warm sand ground, white 20px cards, soft two-layer shadow.",
+      "One accent, action orange, reserved for pressable things.",
+      "Person colours that only ever speak about people.",
+      "Nunito throughout, heavy weights (700 to 800) for anything you read at a glance.",
+      "Tabular numerals everywhere; amounts are the loudest text on screen.",
+      "The split badge: a pie of who owns the cost on every category tile."
+    ],
+    "rules": [
+      {
+        "name": "The Pressable Ember Rule",
+        "body": "Action orange appears only on things that respond to a tap. Never on headings, figures, charts, icons at rest, or decoration. If it is orange, it is pressable.",
+        "section": "colors"
+      },
+      {
+        "name": "The People Own Their Colours Rule",
+        "body": "Person colours mean a person and nothing else. Categories, charts not about people, and states never borrow them.",
+        "section": "colors"
+      },
+      {
+        "name": "The Weight Not Case Rule",
+        "body": "Hierarchy is weight and size. No uppercase labels, no letter-spaced small caps.",
+        "section": "typography"
+      },
+      {
+        "name": "The On-Scale Rule",
+        "body": "Every size is a step on the scale. There are no half-pixel sizes; a size that falls between steps rounds up to the next one.",
+        "section": "typography"
+      },
+      {
+        "name": "The Warm Shadow Rule",
+        "body": "Shadows are tinted with ink (or orange for the Add button), soft, and offset downward only. No neutral grey, no hard offsets.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Token First Rule",
+        "body": "New UI reaches for a primitive, then a token-backed utility. Never raw hex, never an arbitrary value (`text-[15px]`, `bg-[#eadfd2]`, `rounded-[14px]`) where a token exists. Arbitrary values are for layout geometry that is not a design value: grid templates, safe-area calcs, viewport-relative offsets. A value that repeats becomes a token in `@theme` first, and lands in this file.",
+        "section": "code"
+      }
+    ],
+    "dos": [
+      "**Do** reserve action orange (#d43f1c) for pressable things: Add expense, primary buttons, the active mobile tab.",
+      "**Do** show every expense's split with the split badge, in the person colours.",
+      "**Do** put ink text on person-colour fills, never white.",
+      "**Do** keep touch targets at 44px or more and primary actions at 54px or more.",
+      "**Do** set money in Nunito 800 with tabular numerals, home amount first and local amount beneath in soft text.",
+      "**Do** mark unsynced entries with the dashed tile outline and the pending chip.",
+      "**Do** tint shadows with ink at low alpha.",
+      "**Do** build new UI from a primitive or a token-backed utility (`card`, `chip`, `bg-sand`, `text-lg`, `rounded-tile`, `shadow-card`)."
+    ],
+    "donts": [
+      "**Don't** use action orange for headings, figures, chart bars, or decoration; bars and selected chips are ink.",
+      "**Don't** use person colours for anything that is not a person.",
+      "**Don't** fill surfaces with danger brick; it is a text and bar colour for over-budget and errors.",
+      "**Don't** add a second typeface or uppercase letter-spaced labels.",
+      "**Don't** use grey neutrals; every neutral is warm.",
+      "**Don't** dress the app in travel costume (stamps, maps, passport motifs).",
+      "**Don't** write raw hex, an arbitrary size, or a half-pixel value where a token exists."
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "singleQuote": true,
+  "printWidth": 100,
+  "sortTailwindcss": { "stylesheet": "./src/client/styles.css" },
+  "ignorePatterns": ["dist", "data", ".impeccable", "pnpm-lock.yaml", "*.md"]
+}

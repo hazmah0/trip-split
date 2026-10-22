@@ -1,0 +1,17 @@
+node_modules
+dist
+coverage
+*.tsbuildinfo
+*.log
+.DS_Store
+
+# SQLite data: real trip expenses, never committed
+data
+
+.env
+.env.*
+!.env.example
+
+# Impeccable session state and throwaway review renders
+.impeccable/review
+.impeccable/hook.cache.json

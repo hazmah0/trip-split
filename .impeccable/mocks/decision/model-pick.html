@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=390">
+<title>Metro Line Map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#1d1d1b;--g:#00a84d;--o:#f39800;--grey:#9aa0a6;--line:#e6e8ea}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:390px;height:844px;overflow:hidden;background:#fff;color:var(--ink);font-family:Figtree,sans-serif}
+body{position:relative}
+.top{display:flex;justify-content:space-between;align-items:center;padding:14px 20px 8px}
+.top h1{font-size:20px;font-weight:800;letter-spacing:-.01em}
+.top span{font-size:13px;font-weight:600;color:var(--grey)}
+.top .day{border:1.5px solid var(--ink);color:var(--ink);border-radius:99px;padding:3px 10px}
+.bal{padding:0 20px}
+.bal svg{display:block;width:350px;height:76px}
+.bal p{font-size:13px;font-weight:600;color:var(--grey);margin-top:-2px}
+.bal h2{font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.1;margin-top:2px}
+.bal h2 b{color:var(--o)}.bal h2 i{font-style:normal;color:var(--g)}
+.spent{margin:14px 20px 8px;padding:10px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.spent div{display:flex;justify-content:space-between;font-size:13px;font-weight:600}
+.spent b{font-weight:800;font-size:15px}
+.bar{height:4px;background:var(--line);border-radius:2px;margin-top:8px}
+.bar i{display:block;height:4px;width:35.6%;background:var(--ink);border-radius:2px}
+.tabs{display:flex;gap:18px;padding:4px 20px 0;font-size:14px;font-weight:600;color:var(--grey)}
+.tabs .on{color:var(--ink);box-shadow:inset 0 -3px 0 var(--ink);padding-bottom:6px}
+.route{position:relative;margin-top:4px}
+.day-h,.row{position:relative;display:grid;grid-template-columns:56px 1fr auto;align-items:center;padding-right:20px}
+.day-h{height:40px;font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+.day-h::before,.row::before{content:"";position:absolute;left:30px;top:0;bottom:0;width:6px;background:var(--c,var(--grey))}
+.day-h::after{content:"";position:absolute;left:23px;top:9px;width:20px;height:20px;border-radius:50%;background:#fff;border:4px solid var(--ink)}
+.day-h span{font-weight:500;color:var(--grey);text-transform:none;letter-spacing:0;margin-left:6px}
+.row{height:60px}
+.row.a{--c:var(--g)}.row.s{--c:var(--o)}
+.row::after{content:"";position:absolute;left:25px;top:21px;width:18px;height:18px;border-radius:50%;background:#fff;border:4px solid var(--c)}
+.row.pend::after{border-style:dashed;border-width:3px}
+.row.pend{background:repeating-linear-gradient(90deg,transparent 0 6px,transparent 6px 8px)}
+.t{grid-column:2;min-width:0}
+.t b{display:block;font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
+.t small{font-size:12px;color:#5c6166;font-weight:500}
+.t small em{font-style:normal;font-weight:700;color:var(--grey);margin-right:4px}
+.amt{text-align:right}
+.amt b{display:block;font-size:15px;font-weight:800}
+.amt small{font-size:12px;color:var(--grey);font-weight:500}
+.pnd{display:inline-flex;align-items:center;gap:3px;color:#8a6a00;font-weight:600}
+.dock{position:absolute;left:0;right:0;bottom:0;height:84px;background:#fff;border-top:1px solid var(--line);padding:12px 20px}
+.add{display:flex;align-items:center;justify-content:center;gap:8px;height:52px;border-radius:26px;background:var(--ink);color:#fff;font:700 16px Figtree,sans-serif;border:0;width:100%}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/></symbol>
+<symbol id="cloud" viewBox="0 0 24 24"><path d="M7 18a4 4 0 010-8 5 5 0 019.5 1A3.5 3.5 0 0116 18zM3 3l18 18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
+</defs></svg>
+
+<div class="top"><h1>Korea &amp; Japan</h1><span class="day">Day 6 of 18</span></div>
+
+<div class="bal">
+<svg viewBox="0 0 350 76" aria-hidden="true">
+<path d="M0 14H120Q160 14 175 38" fill="none" stroke="#00a84d" stroke-width="8" stroke-linecap="round"/>
+<path d="M0 62H120Q160 62 175 38" fill="none" stroke="#f39800" stroke-width="8" stroke-linecap="round"/>
+<path d="M175 38H350" stroke="#1d1d1b" stroke-width="8" stroke-linecap="round"/>
+<circle cx="175" cy="38" r="13" fill="#fff" stroke="#1d1d1b" stroke-width="5"/>
+<text x="0" y="9" font-size="11" font-weight="700" fill="#00a84d" font-family="Figtree">ALEX LINE</text>
+<text x="0" y="76" font-size="11" font-weight="700" fill="#f39800" font-family="Figtree">SAM LINE</text>
+</svg>
+<h2><b>Sam</b> owes <i>Alex</i> 1&nbsp;284&nbsp;kr</h2>
+</div>
+
+<div class="spent"><div><span>Spent so far</span><span><b>14&nbsp;230&nbsp;kr</b> of 40&nbsp;000&nbsp;kr</span></div><div class="bar"><i></i></div></div>
+
+<div class="tabs"><span class="on">Route</span><span>By category</span><span>Settle</span></div>
+
+<div class="route">
+<div class="day-h">&nbsp;<div style="grid-column:2">Today<span>Thu 23 Oct · Seoul</span></div></div>
+<div class="row s pend"><div class="t"><b>Olive Young</b><small><em>S08</em>Sam · only Sam · shopping</small><br><small class="pnd"><svg width="12" height="12"><use href="#cloud"/></svg>Pending sync</small></div><div class="amt"><b>348 kr</b><small>₩46 500</small></div></div>
+<div class="row s"><div class="t"><b>T-money top-up</b><small><em>S07</em>Sam · only Sam · transport</small></div><div class="amt"><b>150 kr</b><small>₩20 000</small></div></div>
+<div class="row a"><div class="t"><b>Gwangjang Market, bindaetteok</b><small><em>S06</em>Alex · 50/50 · food</small></div><div class="amt"><b>135 kr</b><small>₩18 000</small></div></div>
+<div class="day-h"><div style="grid-column:2">Wed<span>22 Oct · Seoul</span></div></div>
+<div class="row a"><div class="t"><b>Lotte City Hotel Myeongdong, 2 nights</b><small><em>S05</em>Alex · 50/50 · stay</small></div><div class="amt"><b>2&nbsp;340 kr</b><small>paid in SEK</small></div></div>
+<div class="row a"><div class="t"><b>Bukchon hanok tea</b><small><em>S04</em>Alex · 50/50 · food</small></div><div class="amt"><b>105 kr</b><small>₩14 000</small></div></div>
+</div>
+
+<div class="dock"><button class="add"><svg width="20" height="20"><use href="#plus"/></svg>Add expense</button></div>
+</body></html>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=390">
+<title>Terminal Yellow Wayfinding</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hind:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--y:#ffd200;--k:#111111;--paper:#f3f3f1;--mid:#5d5d58}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:390px;height:844px;overflow:hidden;background:var(--paper);color:var(--k);font-family:Hind,sans-serif}
+body{position:relative}
+.top{background:var(--k);color:#fff;display:flex;justify-content:space-between;align-items:center;padding:12px 20px;height:52px}
+.top h1{font-size:19px;font-weight:700}
+.top span{font-size:14px;font-weight:600;border:1.5px solid #fff;padding:1px 10px;border-radius:4px}
+.band{background:var(--y);padding:14px 20px 16px;height:178px}
+.band p{font-size:18px;font-weight:600}
+.band .n{font-size:84px;font-weight:700;line-height:.95;letter-spacing:-.04em;margin:4px 0 6px;font-variant-numeric:tabular-nums}
+.band .n small{font-size:34px;letter-spacing:0;margin-left:6px}
+.band .go{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700}
+.band .go i{display:inline-grid;place-items:center;width:26px;height:26px;background:var(--k);color:var(--y);border-radius:4px}
+.spent{background:var(--k);color:#fff;padding:10px 20px 12px;font-size:14px;font-weight:500}
+.spent div{display:flex;justify-content:space-between}
+.spent b{font-weight:700;font-size:16px}
+.bar{height:6px;background:#3a3a37;margin-top:7px}
+.bar i{display:block;height:6px;width:35.6%;background:#fff}
+.dh{display:flex;justify-content:space-between;background:#e1e1dd;padding:6px 20px;font-size:14px;font-weight:700;border-bottom:1px solid #cfcfca}
+.dh span{font-weight:500;color:var(--mid)}
+.row{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;padding:0 20px;height:62px;border-bottom:1px solid #d9d9d5}
+.ic{width:44px;height:44px;background:var(--k);border-radius:4px;display:grid;place-items:center}
+.ic svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.t b{display:block;font-size:17px;font-weight:600;line-height:1.15;max-width:208px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t small{font-size:13.5px;color:var(--mid);font-weight:500}
+.amt{text-align:right}
+.amt b{display:block;font-size:19px;font-weight:700;letter-spacing:-.01em}
+.amt small{font-size:13px;color:var(--mid)}
+.pend{background:repeating-linear-gradient(135deg,#f3f3f1 0 8px,#ebebe7 8px 16px)}
+.pend .t small:last-child{color:var(--k);font-weight:700}
+.dock{position:absolute;left:0;right:0;bottom:0;height:88px;background:var(--k);padding:14px 20px}
+.add{display:flex;align-items:center;justify-content:space-between;width:100%;height:58px;border:0;border-radius:6px;background:#fff;color:var(--k);padding:0 18px;font:700 20px Hind,sans-serif}
+.add svg{width:26px;height:26px;stroke:var(--k);stroke-width:3;fill:none;stroke-linecap:round}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="food" viewBox="0 0 24 24"><path d="M6 3v7a2 2 0 004 0V3M8 3v18M17 21V3c-2.5 1-4 4-4 8h4"/></symbol>
+<symbol id="train" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14M8 21l2-4M16 21l-2-4"/><circle cx="9" cy="14" r=".6"/><circle cx="15" cy="14" r=".6"/></symbol>
+<symbol id="bag" viewBox="0 0 24 24"><path d="M5 8h14l-1 13H6zM9 8V6a3 3 0 016 0v2"/></symbol>
+<symbol id="bed" viewBox="0 0 24 24"><path d="M3 19V5M3 15h18v4M21 15v-2a3 3 0 00-3-3h-7v5"/><circle cx="7" cy="12" r="1.5"/></symbol>
+<symbol id="arr" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</defs></svg>
+
+<div class="top"><h1>Korea &amp; Japan</h1><span>Day 6 of 18</span></div>
+
+<div class="band">
+<p>Sam owes Alex</p>
+<div class="n">1&nbsp;284<small>kr</small></div>
+<div class="go"><i><svg width="16" height="16"><use href="#arr"/></svg></i>Settle up when ready</div>
+</div>
+
+<div class="spent"><div><span>Spent so far</span><span><b>14&nbsp;230 kr</b> / 40&nbsp;000 kr</span></div><div class="bar"><i></i></div></div>
+
+<div class="dh">Today <span>Thu 23 Oct · Seoul</span></div>
+<div class="row pend"><div class="ic"><svg><use href="#bag"/></svg></div><div class="t"><b>Olive Young</b><small>Sam paid · only Sam</small><small> · Waiting to sync</small></div><div class="amt"><b>348 kr</b><small>₩46 500</small></div></div>
+<div class="row"><div class="ic"><svg><use href="#train"/></svg></div><div class="t"><b>T-money top-up</b><small>Sam paid · only Sam</small></div><div class="amt"><b>150 kr</b><small>₩20 000</small></div></div>
+<div class="row"><div class="ic"><svg><use href="#food"/></svg></div><div class="t"><b>Gwangjang Market, bindaetteok</b><small>Alex paid · split 50/50</small></div><div class="amt"><b>135 kr</b><small>₩18 000</small></div></div>
+<div class="dh">Wednesday <span>22 Oct · Seoul</span></div>
+<div class="row"><div class="ic"><svg><use href="#bed"/></svg></div><div class="t"><b>Lotte City Hotel Myeongdong, 2 nights</b><small>Alex paid · split 50/50</small></div><div class="amt"><b>2&nbsp;340 kr</b><small>paid in SEK</small></div></div>
+<div class="row"><div class="ic"><svg><use href="#food"/></svg></div><div class="t"><b>Bukchon hanok tea</b><small>Alex paid · split 50/50</small></div><div class="amt"><b>105 kr</b><small>₩14 000</small></div></div>
+
+<div class="dock"><button class="add">Add expense<svg viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></svg></button></div>
+</body></html>
