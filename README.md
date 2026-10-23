@@ -30,7 +30,7 @@ docker build -t trip-split .
 docker run -d -p 8080:8080 -e APP_PASSCODE='a-long-owner-passcode' -v trip-split-data:/data trip-split
 ```
 
-Put it behind HTTPS (Caddy, Traefik, or your host's proxy). Service workers and the Secure session cookie need HTTPS everywhere except localhost.
+Put it behind HTTPS (Caddy, Traefik, or your host's proxy). Service workers and the Secure session cookie need HTTPS everywhere except localhost. The app keeps a long-lived `/api/events` request open for live updates. Caddy and Traefik pass it through as is. The app sends `X-Accel-Buffering: no`, which covers most nginx setups; if events still arrive late, set `proxy_buffering off` for that location.
 
 Open the app and enter `APP_PASSCODE` to sign in as the owner, then create a trip. To invite your group, open the trip's **Trip** tab and tap **Share invite link**. Anyone who opens the link joins that trip and sees only it. If the app is installed on the home screen, copy the link and paste it on the app's Login screen, or in **Join a trip** in the trips sheet. **Reset link** makes a new link, and everyone who joined with the old one needs the new one.
 

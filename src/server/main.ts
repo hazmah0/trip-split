@@ -9,6 +9,7 @@ import type { Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { getCookie, setCookie } from 'hono/cookie';
 import { HTTPException } from 'hono/http-exception';
+import { streamSSE } from 'hono/streaming';
 import type { z } from 'zod';
 import { toHome } from '../shared/ledger.ts';
 import { EntryInputSchema, LoginSchema, TripSchema } from '../shared/schema.ts';
@@ -66,7 +67,12 @@ function authorizeEntryWrite(a: Access, input: EntryInput, stored: Entry | null)
     throw new HTTPException(409, { message: 'an entry cannot move between trips' });
 }
 
-async function putEntry(db: Db, a: Access, id: string, body: unknown): Promise<Entry> {
+async function putEntry(
+  db: Db,
+  a: Access,
+  id: string,
+  body: unknown,
+): Promise<{ saved: Entry; changed: boolean }> {
   const input = parse('entry', EntryInputSchema, body, id);
   const stored = db.getEntry(id);
   authorizeEntryWrite(a, input, stored);
@@ -79,7 +85,7 @@ async function putEntry(db: Db, a: Access, id: string, body: unknown): Promise<E
     throw new HTTPException(400, { message: 'invalid entry.paidBy' });
   if (input.shares.length > trip.names.length)
     throw new HTTPException(400, { message: 'invalid entry.shares' });
-  if (stored && stored.updatedAt >= input.updatedAt) return stored;
+  if (stored && stored.updatedAt >= input.updatedAt) return { saved: stored, changed: false };
   const rate =
     input.currency === trip.home
       ? 1
@@ -90,16 +96,21 @@ async function putEntry(db: Db, a: Access, id: string, body: unknown): Promise<E
               throw new HTTPException(502, { message: `rate unavailable: ${err.message}` });
             })));
   db.putEntry({ ...input, rate, home: toHome(input.amount, input.currency, rate, trip.home) });
-  return db.getEntry(id)!;
+  return { saved: db.getEntry(id)!, changed: true };
 }
 
-async function putTrip(db: Db, a: Access, id: string, body: unknown): Promise<Trip> {
+async function putTrip(
+  db: Db,
+  a: Access,
+  id: string,
+  body: unknown,
+): Promise<{ saved: Trip; changed: boolean }> {
   const next = parse('trip', TripSchema, body, id);
   const stored = db.getTrip(id);
   if (stored) need(a, id);
   else ownerOnly(a, 'only the owner can create trips');
   if (stored && next.deleted !== stored.deleted) ownerOnly(a, 'only the owner can delete trips');
-  if (stored && stored.updatedAt >= next.updatedAt) return stored;
+  if (stored && stored.updatedAt >= next.updatedAt) return { saved: stored, changed: false };
   if (stored && stored.home !== next.home && db.hasEntries(id))
     throw new HTTPException(409, { message: 'home currency is fixed once the trip has entries' });
   if (stored && next.names.length < stored.names.length && db.hasEntries(id))
@@ -114,7 +125,7 @@ async function putTrip(db: Db, a: Access, id: string, body: unknown): Promise<Tr
       });
   }
   db.putTrip(next);
-  return db.getTrip(id)!;
+  return { saved: db.getTrip(id)!, changed: true };
 }
 
 const visibleTrips = (db: Db, a: Access) => db.listTrips().filter((t) => can(a, t.id));
@@ -158,6 +169,18 @@ export async function start(opts: StartOptions = {}) {
   const db = openDb(opts.dataDir ?? process.env.DATA_DIR ?? './data');
   const token = Buffer.from(passcode ? sessionToken(passcode) : '');
   const failures: number[] = [];
+  const listeners = new Set<{
+    access: Access;
+    send: (tripId: string) => Promise<void>;
+    end: () => void;
+  }>();
+  const notify = (tripId: string, endMemberStreams = false) => {
+    for (const l of listeners) {
+      if (!can(l.access, tripId)) continue;
+      const sent = l.send(tripId);
+      if (endMemberStreams && !l.access.owner) void sent.then(l.end);
+    }
+  };
   if (!passcode) console.warn('APP_PASSCODE is not set: authentication is DISABLED');
 
   const app = new Hono<Env>();
@@ -209,18 +232,58 @@ export async function start(opts: StartOptions = {}) {
   });
   app.get('/api/state', (c) => c.json<State>(visibleState(db, c.get('access'))));
   app.get('/api/rates', async (c) => c.json(await allRates(db, visibleTrips(db, c.get('access')))));
-  app.put('/api/trips/:id', async (c) =>
-    c.json(await putTrip(db, c.get('access'), c.req.param('id'), await readJson(c))),
-  );
+  app.get('/api/events', (c) => {
+    c.header('X-Accel-Buffering', 'no');
+    const res = streamSSE(c, async (stream) => {
+      // EventSource's default 3s retry would wake an offline phone's radio over a thousand times an hour.
+      await stream.write('retry: 15000\n\n');
+      const ping = setInterval(() => void stream.write(': ping\n\n'), 25_000);
+      await new Promise<void>((done) => {
+        const l = {
+          access: c.get('access'),
+          send: (tripId: string) => stream.writeSSE({ event: 'change', data: tripId }),
+          end: () => {
+            listeners.delete(l);
+            done();
+          },
+        };
+        listeners.add(l);
+        stream.onAbort(l.end);
+      });
+      clearInterval(ping);
+    });
+    // An ended stream's socket would otherwise idle in keep-alive and hold up server.close().
+    res.headers.set('Connection', 'close');
+    return res;
+  });
+  app.put('/api/trips/:id', async (c) => {
+    const { saved, changed } = await putTrip(
+      db,
+      c.get('access'),
+      c.req.param('id'),
+      await readJson(c),
+    );
+    if (changed) notify(saved.id);
+    return c.json(saved);
+  });
   app.post('/api/trips/:id/invite', (c) => {
     ownerOnly(c.get('access'), 'only the owner can reset invite links');
     const trip = db.getTrip(c.req.param('id'));
     if (!trip || trip.deleted) throw new HTTPException(404, { message: 'trip not found' });
-    return c.json({ code: db.rotateInvite(trip.id) });
+    const code = db.rotateInvite(trip.id);
+    notify(trip.id, true);
+    return c.json({ code });
   });
-  app.put('/api/entries/:id', async (c) =>
-    c.json(await putEntry(db, c.get('access'), c.req.param('id'), await readJson(c))),
-  );
+  app.put('/api/entries/:id', async (c) => {
+    const { saved, changed } = await putEntry(
+      db,
+      c.get('access'),
+      c.req.param('id'),
+      await readJson(c),
+    );
+    if (changed) notify(saved.tripId);
+    return c.json(saved);
+  });
   app.all('/api/*', (c) => c.notFound());
 
   const assets = join(distDir, 'assets') + sep;
@@ -246,12 +309,13 @@ export async function start(opts: StartOptions = {}) {
   return {
     url: `http://localhost:${actual}`,
     close: () =>
-      new Promise<void>((ok) =>
+      new Promise<void>((ok) => {
+        for (const l of listeners) l.end();
         server.close(() => {
           db.close();
           ok();
-        }),
-      ),
+        });
+      }),
   };
 }
 

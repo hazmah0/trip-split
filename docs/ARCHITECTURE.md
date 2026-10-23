@@ -197,9 +197,18 @@ Only one sync runs at a time. A call made while a sync is running waits for that
 - you log in,
 - the browser comes back online,
 - the app becomes visible again,
+- the server reports a change to a trip (see [Live updates](#live-updates)),
 - 60 seconds pass.
 
 An entry that the server rejects with a 4xx or 5xx stays in the outbox and is sent again on every sync. The one exception is 410, which means its trip is deleted for good. A trip missing from `/api/state` is not treated as deleted, because a member who lost access (for example after a link reset) sees fewer trips. Their entries stay queued, are left out of the pending count, and sync once the phone rejoins. Check the console for `Rejected entry` when an entry stays pending.
+
+### Live updates
+
+After each successful sync, the client keeps one `EventSource` open on `GET /api/events`. When anyone saves a trip or an entry, the server sends `change` with the trip id to every stream whose session can see that trip, and each of those clients runs a normal sync.
+
+The stream carries no trip or entry data. It is only a nudge. All data still arrives through `/api/state`, so there is one merge path, and the access rules live in one place.
+
+`EventSource` reconnects by itself after a network drop, and the client syncs on every `open` to catch up on what it missed. A 401 or an error status closes the stream for good. The next sync opens a new one, so coming back online, returning to the app, or the 60-second timer revives it. The server works out a stream's trips once, when it opens, so a successful login closes the stream and the sync after it opens one that covers the newly joined trip. The 60-second sync stays as a fallback for a stream that a proxy holds open but no longer delivers.
 
 ### Service worker
 

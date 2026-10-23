@@ -505,6 +505,80 @@ test('a member of a deleted trip gets 410 for its entries and stays signed in', 
   expect((await state()).trips.map((t) => t.id)).not.toContain('m');
 });
 
+const subscribe = async (jar: string, base = app.url) => {
+  const res = await call(jar, '/api/events', 'GET', undefined, base);
+  const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+  let buf = '';
+  const nextChange = async (): Promise<string | null> => {
+    for (;;) {
+      const end = buf.indexOf('\n\n');
+      if (end >= 0) {
+        const block = buf.slice(0, end);
+        buf = buf.slice(end + 2);
+        const change = block.match(/^event: change\ndata: (.*)$/);
+        if (change) return change[1]!;
+        continue;
+      }
+      const { value, done } = await reader.read();
+      if (done) return null;
+      buf += value;
+    }
+  };
+  return { res, nextChange, close: () => reader.cancel() };
+};
+
+test('events: a member hears about changes to their trip only, the owner hears about all', async () => {
+  await api('/api/trips/live1', 'PUT', trip({ id: 'live1', locals: [] }));
+  await api('/api/trips/live2', 'PUT', trip({ id: 'live2', locals: [] }));
+  const joined = await signIn((await state()).invites.live1!);
+  const owner = await subscribe(cookie);
+  const traveller = await subscribe(joined.cookie);
+  try {
+    expect(traveller.res.status).toBe(200);
+    expect(traveller.res.headers.get('content-type')).toMatch(/^text\/event-stream/);
+    expect(traveller.res.headers.get('x-accel-buffering')).toBe('no');
+    const sek = { currency: 'SEK', updatedAt: 1000 };
+    await api('/api/entries/live2-1', 'PUT', entry({ id: 'live2-1', tripId: 'live2', ...sek }));
+    await api('/api/entries/live1-1', 'PUT', entry({ id: 'live1-1', tripId: 'live1', ...sek }));
+    expect(await traveller.nextChange(), 'the live2 write never reached the member').toBe('live1');
+    expect([await owner.nextChange(), await owner.nextChange()]).toStrictEqual(['live2', 'live1']);
+
+    await api('/api/entries/live1-1', 'PUT', entry({ id: 'live1-1', tripId: 'live1', ...sek }));
+    await api('/api/trips/live1', 'PUT', trip({ id: 'live1', locals: [], updatedAt: 999 }));
+    await api('/api/trips/live2', 'PUT', trip({ id: 'live2', locals: [], updatedAt: 1001 }));
+    expect(await owner.nextChange(), 'stale writes to live1 sent nothing').toBe('live2');
+
+    await api('/api/trips/live1/invite', 'POST');
+    expect(await owner.nextChange()).toBe('live1');
+    expect(await traveller.nextChange(), 'the reset is announced to the member').toBe('live1');
+    expect(await traveller.nextChange(), 'then their stream ends').toBeNull();
+  } finally {
+    await Promise.all([owner.close(), traveller.close()]);
+  }
+});
+
+test('events tell the browser to wait 15 seconds before reconnecting', async () => {
+  const res = await call(cookie, '/api/events');
+  const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+  try {
+    expect((await reader.read()).value).toBe('retry: 15000\n\n');
+  } finally {
+    await reader.cancel();
+  }
+});
+
+test('events need a session', async () => {
+  expect((await call('', '/api/events')).status).toBe(401);
+});
+
+test('the server shuts down while an events stream is open', async () => {
+  const other = await start({ port: 0, dataDir: join(dir, 'events'), passcode: '', distDir: dist });
+  const open = await subscribe('', other.url);
+  expect(open.res.status).toBe(200);
+  await other.close();
+  expect(await open.nextChange(), 'the stream ends on shutdown').toBeNull();
+});
+
 test('wrong codes count toward the login brake', async () => {
   const other = await start({
     port: 0,

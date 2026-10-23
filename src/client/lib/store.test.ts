@@ -11,6 +11,20 @@ const jar = new Map<string, string>();
 const dir = mkdtempSync(join(tmpdir(), 'trip-split-store-'));
 let app: Awaited<ReturnType<typeof start>>;
 let store: typeof import('./store.ts');
+const streams: FakeEventSource[] = [];
+class FakeEventSource extends EventTarget {
+  static CLOSED = 2;
+  readyState = 1;
+  url: string;
+  constructor(url: string) {
+    super();
+    this.url = url;
+    streams.push(this);
+  }
+  close() {
+    this.readyState = FakeEventSource.CLOSED;
+  }
+}
 
 beforeAll(async () => {
   app = await start({ port: 0, dataDir: join(dir, 'data'), passcode: 'hunter2', distDir: dir });
@@ -32,6 +46,7 @@ beforeAll(async () => {
     setItem: (k: string, v: string) => storage.set(k, v),
   });
   vi.stubGlobal('navigator', { onLine: true });
+  vi.stubGlobal('EventSource', FakeEventSource);
   vi.stubGlobal('window', new EventTarget());
   vi.stubGlobal('document', Object.assign(new EventTarget(), { visibilityState: 'hidden' }));
   vi.stubGlobal('location', {
@@ -124,4 +139,36 @@ test('a sync requested while one is running runs again afterwards', async () => 
   await store.sync();
   await running;
   expect(outbox(), 'the entry saved mid-sync was sent').not.toContain('late');
+});
+
+const asOwner = async (path: string, init: RequestInit = {}) => {
+  const login = await realFetch(`${app.url}/api/login`, {
+    method: 'POST',
+    body: JSON.stringify({ code: 'hunter2' }),
+  });
+  const cookie = login.headers.getSetCookie()[0]!.split(';')[0]!;
+  return realFetch(app.url + path, { ...init, headers: { cookie } });
+};
+
+test('a change pushed by the server pulls in what another traveller saved', async () => {
+  await asOwner('/api/entries/elsewhere', {
+    method: 'PUT',
+    body: JSON.stringify({ ...entry('elsewhere', 'SEK'), updatedAt: Date.now() }),
+  });
+  const live = streams.at(-1)!;
+  expect(live.url).toBe('/api/events');
+  live.dispatchEvent(new Event('change'));
+  await vi.waitFor(() => expect(cached().entries.map((e) => e.id)).toContain('elsewhere'));
+});
+
+test('joining another trip reopens the live stream, so it covers the new trip', async () => {
+  const { invites } = (await (await asOwner('/api/state')).json()) as State;
+  const opened = streams.length;
+  const before = streams.at(-1)!;
+  expect(await store.login(invites.u!)).toBe(true);
+  expect(before.readyState, 'the stream opened with the old cookies is closed').toBe(
+    FakeEventSource.CLOSED,
+  );
+  expect(streams.length, 'exactly one new stream').toBe(opened + 1);
+  expect(streams.at(-1)!.readyState).not.toBe(FakeEventSource.CLOSED);
 });

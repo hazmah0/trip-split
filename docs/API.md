@@ -46,6 +46,7 @@ flowchart LR
 | `POST` | `/api/login` | No | Exchange an invite code or the passcode for a session cookie |
 | `GET` | `/api/state` | Yes | The live trips and entries this session can see, with their invite codes |
 | `GET` | `/api/rates` | Yes | Latest exchange rates for those trips |
+| `GET` | `/api/events` | Yes | A Server-Sent Events stream that names each trip as it changes |
 | `PUT` | `/api/trips/:id` | Yes | Update a trip, or create, delete or restore one (owner only) |
 | `POST` | `/api/trips/:id/invite` | Owner | Reset the trip's invite link |
 | `PUT` | `/api/entries/:id` | Yes | Create, update or delete an entry |
@@ -91,6 +92,23 @@ Returns the latest cached rate for each local currency of each live trip this se
 ```
 
 A currency with no cached rate yet is left out.
+
+### `GET /api/events`
+
+A long-lived `text/event-stream` response. Each time a trip or one of its entries is saved, the server sends one event to every open stream whose session can see that trip:
+
+```
+event: change
+data: k3j2
+```
+
+`data` is the trip id and nothing else. The client reacts by syncing. A stale or repeated write that the server ignores sends no event. Resetting an invite link also sends `change` for that trip, and then ends the stream of every member session, which must reconnect with the codes it still holds.
+
+The stream opens with `retry: 15000`, so a client that loses the connection waits 15 seconds between reconnect attempts instead of the browser's default of about 3. Every 25 seconds the server sends a `: ping` comment to keep proxies from closing an idle stream. The response sets `X-Accel-Buffering: no`, so nginx passes events through without buffering.
+
+| Status | Error |
+|---|---|
+| 401 | `login required` |
 
 ### `PUT /api/trips/:id`
 
@@ -179,7 +197,7 @@ Returns 200 with the stored entry, which includes `rate` and `home`.
 
 ### `POST /api/trips/:id/invite`
 
-Owner only. Replaces the trip's invite code and returns `{ "code": "<new code>" }`. Every cookie holding the old code stops matching, so everyone who joined with the old link loses the trip until they open the new one.
+Owner only. Replaces the trip's invite code and returns `{ "code": "<new code>" }`. Every cookie holding the old code stops matching, so everyone who joined with the old link loses the trip until they open the new one. Their open `/api/events` streams get a last `change` for the trip and then end.
 
 | Status | Error |
 |---|---|

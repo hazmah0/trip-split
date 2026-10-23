@@ -136,6 +136,16 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
   return (await res.json()) as T;
 }
 
+let events: EventSource | null = null;
+
+// Every sync revives a closed stream, since EventSource gives up for good on a 401 or an error status.
+function listen() {
+  if (events && events.readyState !== EventSource.CLOSED) return;
+  events = new EventSource('/api/events');
+  events.addEventListener('change', () => void sync());
+  events.addEventListener('open', () => void sync());
+}
+
 let syncQueued: Promise<void> | null = null;
 let syncAgain: Promise<void> | null = null;
 
@@ -172,6 +182,7 @@ export function sync(): Promise<void> {
       write(KEY.state, server);
       auth = 'ok';
       online = true;
+      listen();
       if (server.trips.some((t) => t.locals.length)) {
         rates = await api<Rates>('GET', '/api/rates');
         write(KEY.rates, rates);
@@ -238,6 +249,8 @@ export async function login(linkCodeOrPasscode: string): Promise<boolean> {
   if (joined) {
     auth = 'ok';
     joinFailed = false;
+    events?.close();
+    listen();
   }
   await sync();
   if (joined?.tripId) selectTrip(joined.tripId);
