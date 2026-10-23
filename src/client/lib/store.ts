@@ -164,7 +164,13 @@ export function sync(): Promise<void> {
 }
 
 export function saveEntry(input: Omit<EntryInput, 'updatedAt'>) {
-  outbox[input.id] = { ...input, updatedAt: Date.now() };
+  const prev = outbox[input.id] ?? server.entries.find((e) => e.id === input.id);
+  const author = me[input.tripId];
+  outbox[input.id] = {
+    ...input,
+    ...(prev ? { addedBy: prev.addedBy, editedBy: author } : { addedBy: author }),
+    updatedAt: Date.now(),
+  };
   write(KEY.outbox, outbox);
   emit();
   void sync();

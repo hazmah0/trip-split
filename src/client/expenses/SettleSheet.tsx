@@ -1,5 +1,12 @@
 import { useState, type FormEvent } from 'react';
-import { currencySymbol, groupAmount, majorText, parseAmount, today } from '../lib/format.ts';
+import {
+  authorsLine,
+  currencySymbol,
+  groupAmount,
+  majorText,
+  parseAmount,
+  today,
+} from '../lib/format.ts';
 import { deleteEntry, saveEntry } from '../lib/store.ts';
 import { receiver, transferShares, type Settlement } from '../../shared/ledger.ts';
 import type { Entry, Person, Trip } from '../../shared/types.ts';
@@ -24,6 +31,7 @@ export function SettleSheet({
   const [amountText, setAmountText] = useState(initial ? majorText(initial, home) : '');
   const [date, setDate] = useState(entry?.date ?? today());
   const amount = parseAmount(amountText, home);
+  const authors = entry && authorsLine(entry, names);
   const pickFrom = (p: Person) => (p === to && setTo(from), setFrom(p));
   const pickTo = (p: Person) => (p === from && setFrom(to), setTo(p));
 
@@ -102,6 +110,7 @@ export function SettleSheet({
             {entry ? 'Save changes' : 'Record payment'}
           </button>
         </div>
+        {authors && <p className="px-1 hint">{authors}</p>}
       </form>
     </Sheet>
   );

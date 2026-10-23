@@ -36,6 +36,10 @@ async function putEntry(
     throw new HTTPException(400, { message: 'invalid entry.currency' });
   if (input.paidBy >= trip.names.length)
     throw new HTTPException(400, { message: 'invalid entry.paidBy' });
+  if (input.addedBy !== undefined && input.addedBy >= trip.names.length)
+    throw new HTTPException(400, { message: 'invalid entry.addedBy' });
+  if (input.editedBy !== undefined && input.editedBy >= trip.names.length)
+    throw new HTTPException(400, { message: 'invalid entry.editedBy' });
   if (input.shares.length > trip.names.length)
     throw new HTTPException(400, { message: 'invalid entry.shares' });
   if (stored && stored.updatedAt >= input.updatedAt)
@@ -52,6 +56,7 @@ async function putEntry(
             })));
   const { changed, created } = db.putEntry({
     ...input,
+    addedBy: stored ? stored.addedBy : input.addedBy,
     rate,
     home: toHome(input.amount, input.currency, rate, trip.home),
   });

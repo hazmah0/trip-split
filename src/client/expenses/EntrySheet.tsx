@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import {
+  authorsLine,
   currencySymbol,
   groupAmount,
   majorText,
@@ -67,6 +68,7 @@ export function EntrySheet({
   const autoRate = rates[currency];
   const estimate = amount && local && autoRate ? toHome(amount, currency, autoRate, home) : null;
   const who = shares.filter((w) => w > 0).length;
+  const authors = entry && authorsLine(entry, names);
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -255,6 +257,7 @@ export function EntrySheet({
           )}
           <button className="btn-primary">{entry ? 'Save changes' : 'Add expense'}</button>
         </div>
+        {authors && <p className="px-1 hint">{authors}</p>}
       </form>
     </Sheet>
   );

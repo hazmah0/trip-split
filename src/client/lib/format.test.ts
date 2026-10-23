@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { groupAmount, listNames, money, parseAmount } from './format.ts';
+import { authorsLine, groupAmount, listNames, money, parseAmount } from './format.ts';
 
 test('parses what people type', () => {
   expect(parseAmount('18000', 'KRW')).toBe(18000);
@@ -34,4 +34,14 @@ test('lists names', () => {
   expect(listNames(['Ada'])).toBe('Ada');
   expect(listNames(['Ada', 'Bo'])).toBe('Ada & Bo');
   expect(listNames(['Ada', 'Bo', 'Cy'])).toBe('Ada, Bo & Cy');
+});
+
+test.each([
+  [{ addedBy: 0 }, 'Added by Ada'],
+  [{ addedBy: 0, editedBy: 1 }, 'Added by Ada · edited by Bo'],
+  [{ addedBy: 1, editedBy: 1 }, 'Added and edited by Bo'],
+  [{ editedBy: 1 }, 'Edited by Bo'],
+  [{}, null],
+])('names who added and edited %o', (entry, line) => {
+  expect(authorsLine(entry, ['Ada', 'Bo'])).toBe(line);
 });

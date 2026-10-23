@@ -8,6 +8,10 @@ const person = z
   .refine((s) => s.trim().length > 0);
 const nonNegative = z.int().nonnegative();
 const cookieSafeId = z.string().regex(/^[\w-]{1,64}$/);
+const traveller = z
+  .int()
+  .min(0)
+  .max(MAX_PEOPLE - 1);
 
 export const TripSchema = z
   .object({
@@ -34,15 +38,14 @@ export const EntryInputSchema = z.object({
   currency,
   rate: z.number().positive().nullable(), // home units per 1 unit of `currency`
   rateManual: z.boolean(),
-  paidBy: z
-    .int()
-    .min(0)
-    .max(MAX_PEOPLE - 1),
+  paidBy: traveller,
   shares: z
     .array(z.int().min(0).max(100))
     .min(1)
     .max(MAX_PEOPLE)
     .refine((s) => s.some((w) => w > 0)),
+  addedBy: traveller.optional(),
+  editedBy: traveller.optional(),
   updatedAt: nonNegative,
   deleted: z.boolean(),
 });

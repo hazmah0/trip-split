@@ -200,6 +200,21 @@ test('a note is stored, and leaving it out on a later write clears it', async ()
   await api('/api/entries/e5', 'PUT', entry({ id: 'e5', deleted: true, updatedAt: 1002 }));
 });
 
+test('an entry keeps who added it, and a later edit stores who edited it', async () => {
+  const added = await api('/api/entries/by', 'PUT', entry({ id: 'by', addedBy: 0 }));
+  expect((await added.json()).addedBy).toBe(0);
+  const edited = await api(
+    '/api/entries/by',
+    'PUT',
+    entry({ id: 'by', addedBy: 1, editedBy: 1, updatedAt: 1001 }),
+  );
+  expect(await edited.json(), 'an edit cannot rewrite who added it').toMatchObject({
+    addedBy: 0,
+    editedBy: 1,
+  });
+  await api('/api/entries/by', 'PUT', entry({ id: 'by', deleted: true, updatedAt: 1002 }));
+});
+
 test('delete keeps a tombstone and drops the entry from state', async () => {
   const res = await api('/api/entries/e1', 'PUT', entry({ deleted: true, updatedAt: 2000 }));
   expect((await res.json()).deleted).toBe(true);
@@ -222,6 +237,8 @@ test('invalid input is rejected with 400', async () => {
     { date: '2026-02-30' },
     { category: 'bribes' as never },
     { paidBy: 2 as never },
+    { addedBy: 2 },
+    { editedBy: 2 },
     { rate: -1 },
     { note: 'x'.repeat(1001) },
   ];

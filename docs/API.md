@@ -189,6 +189,8 @@ The body is an entry without `home`; the server calculates `home`. The id in the
 | `rate` | `null` to let the server look it up, or a positive number to set it by hand. Always 1 for the home currency. |
 | `paidBy` | Index into the trip's `names` |
 | `shares` | 1 to 20 integer weights from 0 to 100, at least one above 0, no longer than the trip's `names` |
+| `addedBy` | Optional. Index into the trip's `names` of who added the entry. A later write cannot change it. |
+| `editedBy` | Optional. Index into the trip's `names` of who last edited the entry |
 | `deleted` | `true` deletes the entry. A delete needs no rate lookup. |
 
 Returns 200 with the stored entry, which includes `rate` and `home`.

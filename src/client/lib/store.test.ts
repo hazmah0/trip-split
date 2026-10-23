@@ -89,6 +89,8 @@ const trip = (id: string): Omit<Trip, 'updatedAt'> => ({
 });
 const outbox = () => Object.keys(JSON.parse(storage.get('tb:outbox2')!) as object).sort();
 const cached = () => JSON.parse(storage.get('tb:state2')!) as State;
+const queued = (id: string) =>
+  (JSON.parse(storage.get('tb:outbox2')!) as Record<string, EntryInput>)[id];
 
 test('without a session (401), sync leaves the outbox and the cached state alone', async () => {
   store.saveEntry(entry('early', 'SEK', 'old'));
@@ -171,4 +173,20 @@ test('joining another trip reopens the live stream, so it covers the new trip', 
   );
   expect(streams.length, 'exactly one new stream').toBe(opened + 1);
   expect(streams.at(-1)!.readyState).not.toBe(FakeEventSource.CLOSED);
+});
+
+test('saving stamps who added an entry, and an edit keeps that and stamps the editor', async () => {
+  store.setMe('u', 1);
+  store.saveEntry(entry('mine', 'SEK', 'u'));
+  expect(queued('mine')).toMatchObject({ addedBy: 1 });
+  expect(queued('mine')).not.toHaveProperty('editedBy');
+  await store.sync();
+  expect(
+    cached().entries.find((e) => e.id === 'mine'),
+    'synced',
+  ).toMatchObject({ addedBy: 1 });
+
+  store.setMe('u', 0);
+  store.saveEntry({ ...entry('mine', 'SEK', 'u'), title: 'edited' });
+  expect(queued('mine')).toMatchObject({ addedBy: 1, editedBy: 0 });
 });
