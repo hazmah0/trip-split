@@ -7,6 +7,7 @@ The JSON API served by `src/server/main.ts`. The web app is its only client. For
 - Request and response bodies are JSON. Request bodies are limited to 64 KB; a larger body gets 413. A body that is not JSON gets 400 `invalid JSON`.
 - Every error response has the shape `{ "error": "<message>" }`. Validation errors name the first invalid field, for example `invalid entry.currency`.
 - Each `/api/*` response sends `Cache-Control: no-store`.
+- Every response, pages included, gets Hono's `secureHeaders` set (`X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: no-referrer` and others). The server does not send `Strict-Transport-Security`. Set it at the HTTPS proxy.
 - Amounts are integers in minor units; see [Money](ARCHITECTURE.md#money).
 - The client creates ids and `updatedAt`. Writes are idempotent upserts: if a `PUT` has an `updatedAt` that is not newer than the stored one, the server keeps the stored object and returns it with 200.
 

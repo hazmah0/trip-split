@@ -9,6 +9,7 @@ import type { Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { getCookie, setCookie } from 'hono/cookie';
 import { HTTPException } from 'hono/http-exception';
+import { secureHeaders } from 'hono/secure-headers';
 import { streamSSE } from 'hono/streaming';
 import type { z } from 'zod';
 import { toHome } from '../shared/ledger.ts';
@@ -190,6 +191,7 @@ export async function start(opts: StartOptions = {}) {
     return c.json({ error: 'internal error' }, 500);
   });
   app.notFound((c) => c.json({ error: 'not found' }, 404));
+  app.use(secureHeaders({ strictTransportSecurity: false }));
   app.use(async (c, next) => {
     c.header('Cache-Control', 'no-store');
     await next();

@@ -624,3 +624,12 @@ test('static: immutable assets, SPA fallback, no traversal', async () => {
   expect(escape.status).toBe(404);
   expect((await realFetch(`${app.url}/api/nope`)).status).toBe(401);
 });
+
+test('every response carries security headers, but HSTS is left to the HTTPS proxy', async () => {
+  for (const res of [await realFetch(`${app.url}/`), await realFetch(`${app.url}/api/state`)]) {
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+    expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(res.headers.get('strict-transport-security')).toBe(null);
+  }
+});
