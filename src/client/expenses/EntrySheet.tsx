@@ -8,8 +8,9 @@ import {
   today,
 } from '../lib/format.ts';
 import { CATEGORY_LABEL } from '../lib/labels.ts';
-import { deleteEntry, KEY, read, saveEntry, write } from '../lib/store.ts';
-import { allocate, toHome, toMajor } from '../../shared/ledger.ts';
+import { KEY, read, write } from '../lib/storage.ts';
+import { deleteEntry, saveEntry } from '../lib/store.ts';
+import { toHome, toMajor } from '../../shared/ledger.ts';
 import {
   CATEGORIES,
   type Category,
@@ -18,11 +19,9 @@ import {
   type Trip,
 } from '../../shared/types.ts';
 import { Icon } from '../ui/Icon.tsx';
-import { Dot, PersonPicker, personStyle, SplitBadge } from '../ui/people.tsx';
+import { PersonPicker } from '../ui/people.tsx';
 import { Sheet } from '../ui/Sheet.tsx';
-
-const rateLine =
-  'flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-1 text-sm font-semibold text-soft';
+import { SplitPicker } from './SplitPicker.tsx';
 
 function initialCurrency(trip: Trip): string {
   const last = read<string | null>(KEY.lastCurrency, null);
@@ -55,7 +54,6 @@ export function EntrySheet({
   const [shares, setShares] = useState(() =>
     names.map((_, i) => (entry ? (entry.shares[i] ?? 0) : 1)),
   );
-  const [uneven, setUneven] = useState(() => !!entry?.shares.some((w) => w > 1));
   const [date, setDate] = useState(entry?.date ?? today());
   const [manual, setManual] = useState(entry?.rateManual ?? false);
   const [chargedText, setChargedText] = useState(
@@ -69,9 +67,6 @@ export function EntrySheet({
   const autoRate = rates[currency];
   const estimate = amount && local && autoRate ? toHome(amount, currency, autoRate, home) : null;
   const who = shares.filter((w) => w > 0).length;
-  const parts = amount ? allocate(amount, shares) : null;
-  const setShare = (i: number, w: number) =>
-    setShares(shares.map((x, j) => (j === i ? Math.max(0, Math.min(100, w)) : x)));
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -142,7 +137,7 @@ export function EntrySheet({
         </div>
 
         {local && (
-          <div className={`${rateLine} -mt-1.5`}>
+          <div className="-mt-1.5 rate-line">
             {manual ? (
               <label className="field flex-[1_1_200px]">
                 <span>Card charged ({home})</span>
@@ -206,89 +201,13 @@ export function EntrySheet({
           <PersonPicker names={names} value={paidBy} onChange={setPaidBy} label="Paid by" />
         </fieldset>
 
-        <fieldset className="field">
-          <legend className="flex items-center gap-2">
-            Who is it for? <SplitBadge shares={shares} big />
-          </legend>
-          {uneven ? (
-            <ul className="flex flex-col gap-0.5">
-              {names.map((n, i) => (
-                <li key={i} className="flex items-center gap-1">
-                  <span className="min-w-0 flex-1 truncate font-bold">
-                    <Dot p={i} />
-                    {n}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn-icon"
-                    aria-label={`Smaller share for ${n}`}
-                    disabled={!shares[i]}
-                    onClick={() => setShare(i, shares[i]! - 1)}
-                  >
-                    <Icon name="minus" size={18} />
-                  </button>
-                  <span
-                    className="min-w-9 text-center font-extrabold"
-                    aria-label={`${n}: ${shares[i]} shares`}
-                  >
-                    ×{shares[i]}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn-icon"
-                    aria-label={`Bigger share for ${n}`}
-                    onClick={() => setShare(i, shares[i]! + 1)}
-                  >
-                    <Icon name="plus" size={18} />
-                  </button>
-                  <span className="min-w-21 text-right font-bold text-soft">
-                    {parts ? money(parts[i]!, currency) : ''}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="chip"
-                aria-pressed={who === names.length}
-                onClick={() => setShares(names.map(() => 1))}
-              >
-                Everyone
-              </button>
-              {names.map((n, i) => (
-                <button
-                  type="button"
-                  key={i}
-                  className="chip"
-                  style={personStyle(i)}
-                  aria-pressed={shares[i]! > 0}
-                  onClick={() => setShare(i, shares[i] ? 0 : 1)}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          )}
-          <div className={`${rateLine} mt-1.5`}>
-            <span>
-              {!uneven && parts && who > 1
-                ? `${money(Math.round(amount! / who), currency)} each`
-                : ''}
-            </span>
-            <button
-              type="button"
-              className="link"
-              onClick={() => {
-                if (uneven) setShares(shares.map((w) => (w ? 1 : 0)));
-                setUneven(!uneven);
-              }}
-            >
-              {uneven ? 'Split evenly' : 'Split unevenly'}
-            </button>
-          </div>
-        </fieldset>
+        <SplitPicker
+          names={names}
+          shares={shares}
+          onChange={setShares}
+          amount={amount}
+          currency={currency}
+        />
 
         <label className="field">
           <span>Note (optional)</span>

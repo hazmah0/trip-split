@@ -1,6 +1,6 @@
 # API
 
-The JSON API served by `src/server/main.ts`. The web app is its only client. For the data model and sync rules behind these endpoints, see [ARCHITECTURE.md](ARCHITECTURE.md).
+The JSON API served by `src/server/` (routes are mounted in `app.ts`). The web app is its only client. For the data model and sync rules behind these endpoints, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Conventions
 

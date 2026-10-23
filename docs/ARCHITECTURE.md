@@ -18,7 +18,7 @@ flowchart LR
   end
 
   subgraph Server["Node 24 process (src/server)"]
-    API["Hono app<br/>main.ts"]
+    API["Hono app<br/>app.ts"]
     Rates["rates.ts"]
     DB["db.ts"]
     API --> DB
@@ -40,8 +40,8 @@ flowchart LR
 | Path | Runs on | Contents |
 |---|---|---|
 | `src/shared/` | Both | `schema.ts` (Zod schemas), `types.ts` (types derived from them), `ledger.ts` (money math, balances, settlements, stats) |
-| `src/server/` | Node | `main.ts` (HTTP app, auth, validation), `db.ts` (SQLite), `rates.ts` (exchange rates) |
-| `src/client/lib/` | Browser | `store.ts` (state, outbox, sync), `format.ts`, `csv.ts`, `labels.ts` |
+| `src/server/` | Node | `main.ts` (startup and shutdown), `app.ts` (middleware and route mounting), `access.ts` (login and the access gate), `trips.ts` and `entries.ts` (write rules), `state.ts` (state and rates reads), `events.ts` (SSE), `static.ts` (the built web app), `db.ts` (SQLite), `rates.ts` (exchange rates) |
+| `src/client/lib/` | Browser | `store.ts` (state, outbox, sync), `api.ts` (fetch and `HttpError`), `storage.ts` (`localStorage` keys), `format.ts`, `csv.ts`, `labels.ts` |
 | `src/client/` other folders | Browser | React components, grouped by screen: `expenses/`, `trips/`, `stats/`, `gates/`, `ui/` |
 
 The server runs from TypeScript source with Node's built-in type stripping, so there is no server build step. That is why `tsconfig.json` sets `erasableSyntaxOnly`. Vite builds only the client, into `dist/`.
@@ -115,7 +115,7 @@ Nothing is ever removed from the database. A delete is a normal write with `dele
 
 ### Rules the server enforces
 
-Zod checks the shape of every write (`src/shared/schema.ts`). `main.ts` then checks these rules, which need the stored data:
+Zod checks the shape of every write (`src/shared/schema.ts`). `trips.ts` and `entries.ts` then check these rules, which need the stored data:
 
 | Rule | Status code |
 |---|---|
@@ -317,7 +317,7 @@ Each trip has one invite code: 16 random bytes in base64url (22 characters), in 
 
 `POST /api/login` is the only way in, and the Login screen has one field for a pasted link, a bare code or the passcode. The server first looks the value up as the code of a live trip. On a match it sets the cookie `tb_t_<tripId>=<code>`. Otherwise it compares the value with the passcode as HMAC digests in constant time, and on a match it sets `tb_session`. That cookie is an HMAC of a fixed string, keyed with the passcode, so owner sessions survive a server restart, and changing the passcode logs out every owner. Every cookie is `httpOnly`, `SameSite=Lax`, valid for one year, and `Secure` when `X-Forwarded-Proto` is `https`.
 
-Membership is not stored. On every `/api/*` request the gate in `main.ts` reads the values of all `tb_t_*` cookies, looks them up in `invites`, and resolves the request to an `Access`, either `{ owner: true }` or `{ owner: false, trips }`. Routes check it only through `can`, `need` (403) and `ownerOnly` (403). The gate answers 401 only when the cookies grant nothing at all, because the client shows the Login screen on any 401. Resetting a link (`POST /api/trips/:id/invite`) replaces the code, so cookies holding the old code stop matching. Everyone who joined with it loses the trip on their next request and needs the new link.
+Membership is not stored. On every `/api/*` request the gate in `access.ts` reads the values of all `tb_t_*` cookies, looks them up in `invites`, and resolves the request to an `Access`, either `{ owner: true }` or `{ owner: false, trips }`. Routes check it only through `can`, `need` (403) and `ownerOnly` (403). The gate answers 401 only when the cookies grant nothing at all, because the client shows the Login screen on any 401. Resetting a link (`POST /api/trips/:id/invite`) replaces the code, so cookies holding the old code stop matching. Everyone who joined with it loses the trip on their next request and needs the new link.
 
 ```mermaid
 flowchart LR

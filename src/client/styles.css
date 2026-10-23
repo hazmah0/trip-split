@@ -432,6 +432,11 @@
   font-weight: 600;
 }
 
+/* A soft line under a field: a hint on the left, a link toggle on the right. */
+@utility rate-line {
+  @apply flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-1 text-sm font-semibold text-soft;
+}
+
 @utility error {
   color: var(--color-danger);
   font-size: var(--text-md);

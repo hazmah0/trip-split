@@ -2,6 +2,8 @@ import { useSyncExternalStore } from 'react';
 import { toHome } from '../../shared/ledger.ts';
 import { TRIP_GONE } from '../../shared/types.ts';
 import type { Entry, EntryInput, Person, Rates, State, Trip } from '../../shared/types.ts';
+import { HttpError, request } from './api.ts';
+import { KEY, read, write } from './storage.ts';
 
 export type View = {
   auth: 'unknown' | 'ok' | 'login';
@@ -18,29 +20,6 @@ export type View = {
   invite: string | null;
   joinFailed: boolean;
 };
-
-export const KEY = {
-  state: 'tb:state2',
-  outbox: 'tb:outbox2',
-  rates: 'tb:rates2',
-  me: 'tb:me2',
-  trip: 'tb:trip',
-  lastCurrency: 'tb:lastCurrency',
-};
-
-export function read<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-export function write(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
-}
 
 function readCachedState(): State {
   return {
@@ -109,31 +88,16 @@ export function useStore(): View {
   );
 }
 
-export class HttpError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
-
 async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method,
-    headers: body === undefined ? undefined : { 'content-type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    credentials: 'same-origin',
-  });
-  if (res.status === 401) {
-    auth = 'login';
-    emit();
+  try {
+    return await request<T>(method, path, body);
+  } catch (err) {
+    if (err instanceof HttpError && err.status === 401) {
+      auth = 'login';
+      emit();
+    }
+    throw err;
   }
-  if (!res.ok)
-    throw new HttpError(
-      res.status,
-      ((await res.json().catch(() => null)) as { error?: string } | null)?.error ?? res.statusText,
-    );
-  return (await res.json()) as T;
 }
 
 let events: EventSource | null = null;

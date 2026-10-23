@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { majorText, parseAmount } from '../lib/format.ts';
-import { HttpError, saveTrip, setMe } from '../lib/store.ts';
+import { HttpError } from '../lib/api.ts';
+import { saveTrip, setMe } from '../lib/store.ts';
 import { CURRENCY_CODE, MAX_PEOPLE, type Person, type Trip } from '../../shared/types.ts';
 import { Icon } from '../ui/Icon.tsx';
 import { PersonPicker } from '../ui/people.tsx';

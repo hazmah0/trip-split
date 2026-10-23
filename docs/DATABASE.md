@@ -69,7 +69,7 @@ After the `CREATE` statements, `openDb` finds every trip without an `invites` ro
 
 | Statement | What it does | Called from |
 |---|---|---|
-| `getTrip` | One trip by id, tombstones included | `putTrip` and `putEntry` in `main.ts`, and `POST /api/trips/:id/invite` |
+| `getTrip` | One trip by id, tombstones included | `putTrip` in `trips.ts`, `putEntry` in `entries.ts`, and `POST /api/trips/:id/invite` |
 | `listTrips` | Live trips, ordered by `rowid`. An upsert keeps the `rowid`, so this is creation order. | `visibleTrips`, for `GET /api/state` and `GET /api/rates` |
 | `putTrip` | Last-write-wins upsert: `ON CONFLICT (id) DO UPDATE … WHERE excluded.updated_at > trips.updated_at` | `db.putTrip`, from `PUT /api/trips/:id` |
 | `hasEntries` | Whether the trip has a live entry | The two 409 checks in `putTrip` |
