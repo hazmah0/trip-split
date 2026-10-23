@@ -21,6 +21,6 @@ const PLACE: Record<string, string> = { KRW: 'Korea', JPY: 'Japan' };
 const currencyNames = new Intl.DisplayNames(['en'], { type: 'currency' });
 
 export function placeOf(currency: string, home: string): string {
-  if (currency === home) return `Booked from home (${home})`;
+  if (currency === home) return `Logged in ${home}`;
   return PLACE[currency] ?? currencyNames.of(currency) ?? currency;
 }
