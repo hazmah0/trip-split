@@ -1,7 +1,7 @@
 {
   "name": "Trip Split",
   "short_name": "Trip Split",
-  "description": "Shared travel expenses for two, in any currency.",
+  "description": "Shared travel expenses for couples and groups, in any currency.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f6efe7",

@@ -16,6 +16,7 @@ export function TripForm({
   template,
   me,
   hasEntries,
+  owner,
   onDone,
   onCancel,
 }: {
@@ -23,6 +24,7 @@ export function TripForm({
   template?: Trip;
   me?: Person | null;
   hasEntries?: boolean;
+  owner?: boolean;
   onDone: () => void;
   onCancel?: () => void;
 }) {
@@ -187,7 +189,7 @@ export function TripForm({
         </p>
       )}
       <div className="form-actions">
-        {trip && (
+        {trip && owner && (
           <button type="button" className="btn-danger" disabled={busy} onClick={remove}>
             Delete trip
           </button>

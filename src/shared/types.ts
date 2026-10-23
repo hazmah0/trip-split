@@ -31,6 +31,14 @@ export type EntryInput = z.infer<typeof EntryInputSchema>;
 
 export type Entry = Omit<EntryInput, 'rate'> & { rate: number; home: number };
 
-export type State = { trips: Trip[]; entries: Entry[] };
+export type State = {
+  trips: Trip[];
+  entries: Entry[];
+  invites: Record<string, string>;
+  owner: boolean;
+};
+
+export const TRIP_GONE = 410;
+export const UNKNOWN_CODE = 404;
 
 export type Rates = Record<string, Record<string, number>>;

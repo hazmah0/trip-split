@@ -53,6 +53,7 @@ A **trip** has an ordered list of traveller names, a home currency, zero or more
 ```mermaid
 erDiagram
   TRIP ||--o{ ENTRY : "has"
+  TRIP ||--|| INVITE : "has"
   TRIP {
     string id PK "client-generated"
     string name
@@ -81,6 +82,10 @@ erDiagram
     int updatedAt
     bool deleted
   }
+  INVITE {
+    string trip_id PK "FK to TRIP"
+    string code "22 chars, unique"
+  }
   RATE {
     string date PK
     string currency PK
@@ -91,6 +96,8 @@ erDiagram
 
 ### Storage
 
+For the full schema, backups and schema changes, see [DATABASE.md](DATABASE.md).
+
 Each SQLite table keeps the whole validated object as JSON in a `json` column. The other columns are copies of the fields that SQL needs for lookups, ordering and conflict checks:
 
 | Table | Columns | Why the extra columns exist |
@@ -98,6 +105,7 @@ Each SQLite table keeps the whole validated object as JSON in a `json` column. T
 | `trips` | `id`, `updated_at`, `json` | Last-write-wins check |
 | `entries` | `id`, `trip_id`, `date`, `updated_at`, `json` | Last-write-wins check, ordering by date, index on `trip_id` |
 | `rates` | `date`, `currency`, `home`, `rate` | Exchange rate cache, one row per day and currency pair |
+| `invites` | `trip_id`, `code` | Each trip's current invite code (see [Auth](#auth)). Kept out of `trips.json`, so `/api/state` serves a code only to sessions that can see its trip. |
 
 Queries filter out deleted rows with `json ->> 'deleted' = 0`. Trips are listed by `rowid`, which is creation order, because an upsert keeps the `rowid`.
 
@@ -112,7 +120,9 @@ Zod checks the shape of every write (`src/shared/schema.ts`). `main.ts` then che
 | Rule | Status code |
 |---|---|
 | The URL id and the body `id` must match | 400 |
-| An entry's trip must exist and must not be deleted | 409 |
+| The session must be allowed to see the entry's trip, and the trip of the stored entry with that id | 403 |
+| Only the owner can create, delete or restore a trip, and a member can update only their trips | 403 |
+| An entry's trip must exist and must not be deleted | 410 |
 | An entry's currency must be the trip's home currency or one of its local currencies | 400 |
 | `paidBy` and the `shares` array must fit the trip's traveller list | 400 |
 | An entry cannot move to a different trip | 409 |
@@ -161,7 +171,10 @@ sequenceDiagram
     alt 200
       A-->>S: stored entry (server rate and home amount)
       S->>S: remove from outbox unless edited again meanwhile
-    else 4xx or 5xx (not 401)
+    else 410
+      A-->>S: trip deleted
+      S->>S: drop from outbox
+    else other 4xx or 5xx (not 401)
       A-->>S: { error }
       S->>S: log and keep in outbox, try again next sync
     else network error or 401
@@ -169,8 +182,7 @@ sequenceDiagram
     end
   end
   S->>A: GET /api/state
-  A-->>S: trips and entries
-  S->>S: drop outbox entries whose trip is gone
+  A-->>S: trips, entries and invites this session can see
   opt any trip has local currencies
     S->>A: GET /api/rates
   end
@@ -187,7 +199,7 @@ Only one sync runs at a time. A call made while a sync is running waits for that
 - the app becomes visible again,
 - 60 seconds pass.
 
-An entry that the server rejects with a 4xx or 5xx stays in the outbox and is sent again on every sync. Nothing is dropped without confirmation. Check the console for `Rejected entry` when an entry stays pending.
+An entry that the server rejects with a 4xx or 5xx stays in the outbox and is sent again on every sync. The one exception is 410, which means its trip is deleted for good. A trip missing from `/api/state` is not treated as deleted, because a member who lost access (for example after a link reset) sees fewer trips. Their entries stay queued, are left out of the pending count, and sync once the phone rejoins. Check the console for `Rejected entry` when an entry stays pending.
 
 ### Service worker
 
@@ -197,7 +209,7 @@ An entry that the server rejects with a 4xx or 5xx stays in the outbox and is se
 
 | Key | Contents |
 |---|---|
-| `tb:state2` | Last server state (`{ trips, entries }`) |
+| `tb:state2` | Last server state (`{ trips, entries, invites, owner }`). A cache from before invites loads with `invites: {}` and `owner: false` until the next sync. |
 | `tb:outbox2` | Unconfirmed entries, keyed by id |
 | `tb:rates2` | Latest rates (`{ [home]: { [currency]: rate } }`) |
 | `tb:me2` | Which traveller this phone is, per trip id |
@@ -216,7 +228,8 @@ flowchart TD
   auth -- login --> Login
   auth -- unknown or ok --> trip{selected trip?}
   trip -- "no, auth unknown" --> Splash["Splash<br/>(loading or offline)"]
-  trip -- "no, auth ok" --> FirstTrip
+  trip -- "no, auth ok, owner" --> FirstTrip
+  trip -- "no, auth ok, member" --> Join["Login<br/>(paste an invite link)"]
   trip -- yes --> me{"traveller picked<br/>on this phone?"}
   me -- no --> WhoAmI
   me -- yes --> Main["Main<br/>expenses, stats, trip"]
@@ -284,14 +297,31 @@ flowchart TD
 
 - **Past dates** are cached forever, because ECB rates for a past day don't change.
 - **Today and future dates** use the latest rate. It is fetched at most once an hour per currency pair; the timer is kept in memory, so it resets when the server restarts. Today's rate may not be published yet.
-- **`GET /api/rates`** returns the latest rate for every local currency of every live trip, grouped by home currency. The client uses these rates to estimate offline entries.
+- **`GET /api/rates`** returns the latest rate for every local currency of every live trip the session can see, grouped by home currency. The client uses these rates to estimate offline entries.
 - **Currency check:** when a trip is created, or gets a new home or local currency, the server checks that frankfurter publishes those currencies. The currency list is fetched once per process. If frankfurter is down, the check is skipped instead of blocking the save.
 
 ## Auth
 
-The app has one shared passcode, set in `APP_PASSCODE`. `POST /api/login` compares HMAC digests in constant time. On success it sets the `tb_session` cookie: `httpOnly`, `SameSite=Lax`, valid for one year, and `Secure` when `X-Forwarded-Proto` is `https`. The cookie value is an HMAC of a fixed string, keyed with the passcode. It is not stored anywhere, so changing the passcode logs out every phone.
+There are two kinds of session. The **owner** knows `APP_PASSCODE` and sees every trip. Only the owner can create and delete trips and reset invite links. A **member** joined through a trip's invite link and sees only the trips they joined. Members can read and write those trips, including their entries, travellers and the trip's settings, but cannot delete or restore the trip.
 
-Failed logins count globally, not per IP, because client IPs are unreliable behind a proxy. After 20 failures within 10 minutes, the server answers 429 until older failures expire. When `APP_PASSCODE` is unset, the server logs a warning and skips auth.
+Each trip has one invite code: 16 random bytes in base64url (22 characters), in the `invites` table. Every trip, deleted ones included, has a row. `openDb` backfills codes for trips that predate invites, and `db.putTrip` adds one for each new trip. Rows are never deleted. The invite link is `https://<host>/#join=<code>`. The code sits in the URL fragment, so it never reaches the server's logs, the `Referer` header or the service worker's page cache.
+
+`POST /api/login` is the only way in, and the Login screen has one field for a pasted link, a bare code or the passcode. The server first looks the value up as the code of a live trip. On a match it sets the cookie `tb_t_<tripId>=<code>`. Otherwise it compares the value with the passcode as HMAC digests in constant time, and on a match it sets `tb_session`. That cookie is an HMAC of a fixed string, keyed with the passcode, so owner sessions survive a server restart, and changing the passcode logs out every owner. Every cookie is `httpOnly`, `SameSite=Lax`, valid for one year, and `Secure` when `X-Forwarded-Proto` is `https`.
+
+Membership is not stored. On every `/api/*` request the gate in `main.ts` reads the values of all `tb_t_*` cookies, looks them up in `invites`, and resolves the request to an `Access`, either `{ owner: true }` or `{ owner: false, trips }`. Routes check it only through `can`, `need` (403) and `ownerOnly` (403). The gate answers 401 only when the cookies grant nothing at all, because the client shows the Login screen on any 401. Resetting a link (`POST /api/trips/:id/invite`) replaces the code, so cookies holding the old code stop matching. Everyone who joined with it loses the trip on their next request and needs the new link.
+
+```mermaid
+flowchart LR
+  C[cookies] --> O{"tb_session valid,<br/>or no passcode?"}
+  O -- yes --> Own["owner: every trip"]
+  O -- no --> M["trips whose current code<br/>is a tb_t_* cookie value"]
+  M -- none --> E401[401]
+  M -- some --> Mem["member: those trips"]
+```
+
+Failed logins count globally, not per IP, because client IPs are unreliable behind a proxy. A wrong code or passcode gets 404, not 401, so a member who pastes a bad second link is not sent to the Login screen. After 20 failures within 10 minutes, the server answers 429 until older failures expire, for codes and the passcode alike. When `APP_PASSCODE` is unset, the server logs a warning and treats every request as the owner.
+
+A home-screen app on iOS keeps its own cookies, separate from Safari's. A link opened in Safari therefore does not sign in the installed app, so the app's Login screen and the **Join a trip** row in the trips sheet accept a pasted link.
 
 ## Tests
 

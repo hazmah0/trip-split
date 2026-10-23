@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App.tsx';
-import { sync } from './lib/store.ts';
+import { boot } from './lib/store.ts';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -10,6 +10,6 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
-void sync();
+void boot();
 if ('serviceWorker' in navigator && import.meta.env.PROD)
   void navigator.serviceWorker.register('/sw.js');

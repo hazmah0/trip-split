@@ -36,7 +36,7 @@ Built for a travel group of any size, paying in mixed currencies. Every amount i
 - Rates: ECB daily reference rates via frankfurter.dev, overridable per expense.
 - Categories with a spending breakdown by category and by country (currency).
 - Settle-up: suggests the fewest payments that square everyone up; each is recorded as a transfer.
-- Access is protected by one shared passcode.
+- Each trip has its own invite link. Travellers who join with it see only that trip. The owner holds the passcode, sees every trip, creates and deletes trips, and can reset a trip's link to cut off everyone who joined with the old one.
 - Not decided: CSV export, receipt photos.
 
 ## Product Principles

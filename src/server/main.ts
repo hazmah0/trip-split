@@ -12,12 +12,37 @@ import { HTTPException } from 'hono/http-exception';
 import type { z } from 'zod';
 import { toHome } from '../shared/ledger.ts';
 import { EntryInputSchema, LoginSchema, TripSchema } from '../shared/schema.ts';
-import type { Entry, Rates, State, Trip } from '../shared/types.ts';
+import { TRIP_GONE, UNKNOWN_CODE } from '../shared/types.ts';
+import type { Entry, EntryInput, Rates, State, Trip } from '../shared/types.ts';
 import { openDb } from './db.ts';
 import type { Db } from './db.ts';
 import { latestRates, rateFor, unsupportedCurrencies } from './rates.ts';
 
 const COOKIE = 'tb_session';
+const TRIP_COOKIE = 'tb_t_';
+
+type Access = { owner: true } | { owner: false; trips: ReadonlySet<string> };
+type Env = { Variables: { access: Access } };
+
+const can = (a: Access, tripId: string) => a.owner || a.trips.has(tripId);
+function need(a: Access, tripId: string) {
+  if (!can(a, tripId)) throw new HTTPException(403, { message: 'not a member of this trip' });
+}
+function ownerOnly(a: Access, why: string) {
+  if (!a.owner) throw new HTTPException(403, { message: why });
+}
+
+function resolveAccess(
+  cookies: Record<string, string>,
+  isOwner: boolean,
+  tripsForCodes: (codes: string[]) => string[],
+): Access {
+  if (isOwner) return { owner: true };
+  const codes = Object.entries(cookies)
+    .filter(([name]) => name.startsWith(TRIP_COOKIE))
+    .map(([, code]) => code);
+  return { owner: false, trips: new Set(tripsForCodes(codes)) };
+}
 
 function parse<T extends z.ZodType<{ id: string }>>(
   what: string,
@@ -34,20 +59,27 @@ function parse<T extends z.ZodType<{ id: string }>>(
   return r.data;
 }
 
-async function putEntry(db: Db, id: string, body: unknown): Promise<Entry> {
+function authorizeEntryWrite(a: Access, input: EntryInput, stored: Entry | null) {
+  need(a, input.tripId);
+  if (stored) need(a, stored.tripId);
+  if (stored && stored.tripId !== input.tripId)
+    throw new HTTPException(409, { message: 'an entry cannot move between trips' });
+}
+
+async function putEntry(db: Db, a: Access, id: string, body: unknown): Promise<Entry> {
   const input = parse('entry', EntryInputSchema, body, id);
+  const stored = db.getEntry(id);
+  authorizeEntryWrite(a, input, stored);
   const trip = db.getTrip(input.tripId);
-  if (!trip || trip.deleted) throw new HTTPException(409, { message: 'trip not found or deleted' });
+  if (!trip || trip.deleted)
+    throw new HTTPException(TRIP_GONE, { message: 'trip not found or deleted' });
   if (input.currency !== trip.home && !trip.locals.includes(input.currency))
     throw new HTTPException(400, { message: 'invalid entry.currency' });
   if (input.paidBy >= trip.names.length)
     throw new HTTPException(400, { message: 'invalid entry.paidBy' });
   if (input.shares.length > trip.names.length)
     throw new HTTPException(400, { message: 'invalid entry.shares' });
-  const stored = db.getEntry(id);
   if (stored && stored.updatedAt >= input.updatedAt) return stored;
-  if (stored && stored.tripId !== input.tripId)
-    throw new HTTPException(409, { message: 'an entry cannot move between trips' });
   const rate =
     input.currency === trip.home
       ? 1
@@ -61,9 +93,12 @@ async function putEntry(db: Db, id: string, body: unknown): Promise<Entry> {
   return db.getEntry(id)!;
 }
 
-async function putTrip(db: Db, id: string, body: unknown): Promise<Trip> {
+async function putTrip(db: Db, a: Access, id: string, body: unknown): Promise<Trip> {
   const next = parse('trip', TripSchema, body, id);
   const stored = db.getTrip(id);
+  if (stored) need(a, id);
+  else ownerOnly(a, 'only the owner can create trips');
+  if (stored && next.deleted !== stored.deleted) ownerOnly(a, 'only the owner can delete trips');
   if (stored && stored.updatedAt >= next.updatedAt) return stored;
   if (stored && stored.home !== next.home && db.hasEntries(id))
     throw new HTTPException(409, { message: 'home currency is fixed once the trip has entries' });
@@ -82,10 +117,22 @@ async function putTrip(db: Db, id: string, body: unknown): Promise<Trip> {
   return db.getTrip(id)!;
 }
 
-async function allRates(db: Db): Promise<Rates> {
+const visibleTrips = (db: Db, a: Access) => db.listTrips().filter((t) => can(a, t.id));
+
+function visibleState(db: Db, a: Access): State {
+  const trips = visibleTrips(db, a);
+  const invites = db.listInvites();
+  return {
+    trips,
+    entries: db.listEntries().filter((e) => can(a, e.tripId)),
+    invites: Object.fromEntries(trips.map((t) => [t.id, invites[t.id]!])),
+    owner: a.owner,
+  };
+}
+
+async function allRates(db: Db, trips: Trip[]): Promise<Rates> {
   const locals = new Map<string, Set<string>>();
-  for (const t of db.listTrips())
-    locals.set(t.home, new Set([...(locals.get(t.home) ?? []), ...t.locals]));
+  for (const t of trips) locals.set(t.home, new Set([...(locals.get(t.home) ?? []), ...t.locals]));
   return Object.fromEntries(
     await Promise.all(
       [...locals].map(async ([home, ls]) => [home, await latestRates(db, [...ls], home)]),
@@ -113,7 +160,7 @@ export async function start(opts: StartOptions = {}) {
   const failures: number[] = [];
   if (!passcode) console.warn('APP_PASSCODE is not set: authentication is DISABLED');
 
-  const app = new Hono();
+  const app = new Hono<Env>();
   app.onError((err, c) => {
     if (err instanceof HTTPException) return c.json({ error: err.message }, err.status);
     console.error(err);
@@ -134,39 +181,45 @@ export async function start(opts: StartOptions = {}) {
   );
   app.all('/api/health', (c) => c.json({ ok: true }));
   app.post('/api/login', async (c) => {
-    const given = LoginSchema.safeParse(await readJson(c)).data?.passcode ?? '';
+    const code = LoginSchema.safeParse(await readJson(c)).data?.code ?? '';
     // Global brute-force brake: client IPs are unreliable behind proxies, and only a handful of travellers ever log in.
     const now = Date.now();
     while (failures.length && failures[0]! < now - 10 * 60_000) failures.shift();
     if (failures.length >= 20)
       throw new HTTPException(429, { message: 'too many attempts, wait 10 minutes' });
-    if (passcode && !timingSafeEqual(sha256(given), sha256(passcode))) {
+    const tripId = code ? db.liveTripForCode(code) : null;
+    if (!tripId && passcode && !timingSafeEqual(sha256(code), sha256(passcode))) {
       failures.push(now);
-      throw new HTTPException(401, { message: 'wrong passcode' });
+      throw new HTTPException(UNKNOWN_CODE, { message: "that link or code didn't work" });
     }
     const secure = c.req.header('x-forwarded-proto') === 'https';
-    setCookie(c, COOKIE, token.toString(), {
-      path: '/',
-      maxAge: 31536000,
-      httpOnly: true,
-      sameSite: 'Lax',
-      secure,
-    });
-    return c.json({ ok: true });
+    const attrs = { path: '/', maxAge: 31536000, httpOnly: true, sameSite: 'Lax', secure } as const;
+    if (tripId) setCookie(c, TRIP_COOKIE + tripId, code, attrs);
+    else setCookie(c, COOKIE, token.toString(), attrs);
+    return c.json({ tripId });
   });
   app.use('/api/*', async (c, next) => {
     const got = Buffer.from(getCookie(c, COOKIE) ?? '');
-    if (passcode && (got.length !== token.length || !timingSafeEqual(got, token)))
+    const isOwner = !passcode || (got.length === token.length && timingSafeEqual(got, token));
+    const access = resolveAccess(getCookie(c), isOwner, db.tripsForCodes);
+    if (!access.owner && !access.trips.size)
       throw new HTTPException(401, { message: 'login required' });
+    c.set('access', access);
     await next();
   });
-  app.get('/api/state', (c) => c.json<State>({ trips: db.listTrips(), entries: db.listEntries() }));
-  app.get('/api/rates', async (c) => c.json(await allRates(db)));
+  app.get('/api/state', (c) => c.json<State>(visibleState(db, c.get('access'))));
+  app.get('/api/rates', async (c) => c.json(await allRates(db, visibleTrips(db, c.get('access')))));
   app.put('/api/trips/:id', async (c) =>
-    c.json(await putTrip(db, c.req.param('id'), await readJson(c))),
+    c.json(await putTrip(db, c.get('access'), c.req.param('id'), await readJson(c))),
   );
+  app.post('/api/trips/:id/invite', (c) => {
+    ownerOnly(c.get('access'), 'only the owner can reset invite links');
+    const trip = db.getTrip(c.req.param('id'));
+    if (!trip || trip.deleted) throw new HTTPException(404, { message: 'trip not found' });
+    return c.json({ code: db.rotateInvite(trip.id) });
+  });
   app.put('/api/entries/:id', async (c) =>
-    c.json(await putEntry(db, c.req.param('id'), await readJson(c))),
+    c.json(await putEntry(db, c.get('access'), c.req.param('id'), await readJson(c))),
   );
   app.all('/api/*', (c) => c.notFound());
 

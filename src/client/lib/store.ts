@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { toHome } from '../../shared/ledger.ts';
+import { TRIP_GONE } from '../../shared/types.ts';
 import type { Entry, EntryInput, Person, Rates, State, Trip } from '../../shared/types.ts';
 
 export type View = {
@@ -13,6 +14,9 @@ export type View = {
   pending: Set<string>;
   rates: Record<string, number>;
   me: Person | null;
+  owner: boolean;
+  invite: string | null;
+  joinFailed: boolean;
 };
 
 export const KEY = {
@@ -38,7 +42,15 @@ export function write(key: string, value: unknown) {
   } catch {}
 }
 
-let server: State = read<State>(KEY.state, { trips: [], entries: [] });
+function readCachedState(): State {
+  return {
+    invites: {},
+    owner: false,
+    ...read<Omit<State, 'invites' | 'owner'>>(KEY.state, { trips: [], entries: [] }),
+  };
+}
+
+let server: State = readCachedState();
 let outbox: Record<string, EntryInput> = read(KEY.outbox, {});
 let rates: Rates = read(KEY.rates, {});
 let me: Record<string, Person> = read(KEY.me, {});
@@ -46,6 +58,7 @@ let tripId: string | null = read<string | null>(KEY.trip, null);
 let auth: View['auth'] = 'unknown';
 let online = navigator.onLine;
 let syncing = false;
+let joinFailed = false;
 
 const listeners = new Set<() => void>();
 let view = compute();
@@ -66,6 +79,7 @@ function compute(): View {
     .filter((e) => !e.deleted && tripsById.has(e.tripId))
     .sort((a, b) => (a.date === b.date ? b.updatedAt - a.updatedAt : a.date < b.date ? 1 : -1));
   const trip = (tripId && tripsById.get(tripId)) || server.trips.at(-1) || null;
+  const visibleOutbox = Object.values(outbox).filter((i) => tripsById.has(i.tripId));
   return {
     auth,
     online,
@@ -74,9 +88,12 @@ function compute(): View {
     trip,
     allEntries,
     entries: trip ? allEntries.filter((e) => e.tripId === trip.id) : [],
-    pending: new Set(Object.keys(outbox)),
+    pending: new Set(visibleOutbox.map((i) => i.id)),
     rates: (trip && rates[trip.home]) || {},
     me: trip ? (me[trip.id] ?? null) : null,
+    owner: server.owner,
+    invite: (trip && server.invites[trip.id]) ?? null,
+    joinFailed,
   };
 }
 
@@ -120,9 +137,15 @@ async function api<T>(method: string, path: string, body?: unknown): Promise<T> 
 }
 
 let syncQueued: Promise<void> | null = null;
+let syncAgain: Promise<void> | null = null;
 
 export function sync(): Promise<void> {
-  syncQueued ??= (async () => {
+  if (syncQueued)
+    return (syncAgain ??= syncQueued.then(() => {
+      syncAgain = null;
+      return sync();
+    }));
+  syncQueued = (async () => {
     syncing = true;
     emit();
     try {
@@ -140,16 +163,13 @@ export function sync(): Promise<void> {
             entries: [...server.entries.filter((e) => e.id !== saved.id), saved],
           };
         } catch (err) {
-          if (err instanceof HttpError && err.status !== 401) {
-            console.error('Rejected entry', input, err.message);
-          } else throw err;
+          if (!(err instanceof HttpError) || err.status === 401) throw err;
+          if (err.status === TRIP_GONE) delete outbox[input.id];
+          else console.error('Rejected entry', input, err.message);
         }
       }
       server = await api<State>('GET', '/api/state');
       write(KEY.state, server);
-      const live = new Set(server.trips.map((t) => t.id));
-      for (const [id, input] of Object.entries(outbox))
-        if (!live.has(input.tripId)) delete outbox[id];
       auth = 'ok';
       online = true;
       if (server.trips.some((t) => t.locals.length)) {
@@ -199,15 +219,47 @@ export function selectTrip(id: string) {
   emit();
 }
 
-export async function login(passcode: string): Promise<boolean> {
+export const inviteUrl = (code: string) => `${location.origin}/#join=${code}`;
+const inviteCode = (text: string) => text.match(/#join=([\w-]+)/)?.[1];
+
+export async function login(linkCodeOrPasscode: string): Promise<boolean> {
+  const code = inviteCode(linkCodeOrPasscode) ?? linkCodeOrPasscode.trim();
+  let joined: { tripId: string | null } | null = null;
   try {
-    await api('POST', '/api/login', { passcode });
-    auth = 'ok';
-    await sync();
-    return true;
-  } catch {
-    return false;
+    joined = await api<{ tripId: string | null }>('POST', '/api/login', { code });
+  } catch (err) {
+    const offline = !(err instanceof HttpError);
+    if (offline) {
+      await sync();
+      return false;
+    }
   }
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  if (joined) {
+    auth = 'ok';
+    joinFailed = false;
+  }
+  await sync();
+  if (joined?.tripId) selectTrip(joined.tripId);
+  return joined !== null;
+}
+
+export async function boot() {
+  const code = inviteCode(location.hash);
+  if (!code) return sync();
+  // Offline keeps #join= for a retry, so only a server rejection counts as failed.
+  joinFailed = !(await login(code)) && online;
+  emit();
+}
+
+export async function rotateInvite(id: string) {
+  const { code } = await api<{ code: string }>(
+    'POST',
+    `/api/trips/${encodeURIComponent(id)}/invite`,
+  );
+  server = { ...server, invites: { ...server.invites, [id]: code } };
+  write(KEY.state, server);
+  emit();
 }
 
 export function setMe(trip: string, p: Person) {

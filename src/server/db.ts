@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -8,6 +9,7 @@ export type Db = ReturnType<typeof openDb>;
 const json = <T>(row: unknown): T | null =>
   row ? (JSON.parse((row as { json: string }).json) as T) : null;
 const rate = (row: unknown): number | null => (row ? (row as { rate: number }).rate : null);
+const newCode = () => randomBytes(16).toString('base64url');
 
 export function openDb(dataDir: string) {
   mkdirSync(dataDir, { recursive: true });
@@ -23,6 +25,7 @@ export function openDb(dataDir: string) {
       date TEXT NOT NULL, currency TEXT NOT NULL, home TEXT NOT NULL, rate REAL NOT NULL,
       PRIMARY KEY (date, currency, home)
     );
+    CREATE TABLE IF NOT EXISTS invites (trip_id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE);
   `);
 
   const q = {
@@ -57,12 +60,32 @@ export function openDb(dataDir: string) {
     putRate: db.prepare(
       'INSERT OR REPLACE INTO rates (date, currency, home, rate) VALUES (?, ?, ?, ?)',
     ),
+    addInvite: db.prepare('INSERT OR IGNORE INTO invites (trip_id, code) VALUES (?, ?)'),
+    listInvites: db.prepare('SELECT trip_id, code FROM invites'),
+    liveTripForCode: db.prepare(
+      "SELECT i.trip_id FROM invites i JOIN trips t ON t.id = i.trip_id WHERE i.code = ? AND t.json ->> 'deleted' = 0",
+    ),
+    tripsForCodes: db.prepare(
+      'SELECT trip_id FROM invites WHERE code IN (SELECT value FROM json_each(?))',
+    ),
+    rotateInvite: db.prepare('UPDATE invites SET code = ? WHERE trip_id = ?'),
+    tripsWithoutInvite: db.prepare(
+      'SELECT id FROM trips WHERE id NOT IN (SELECT trip_id FROM invites)',
+    ),
   };
+  function backfillInvites() {
+    for (const { id } of q.tripsWithoutInvite.all() as { id: string }[])
+      q.addInvite.run(id, newCode());
+  }
+  backfillInvites();
 
   return {
     getTrip: (id: string) => json<Trip>(q.getTrip.get(id)),
     listTrips: () => q.listTrips.all().map((r) => json<Trip>(r)!),
-    putTrip: (t: Trip) => void q.putTrip.run(t.id, t.updatedAt, JSON.stringify(t)),
+    putTrip: (t: Trip) => {
+      q.putTrip.run(t.id, t.updatedAt, JSON.stringify(t));
+      q.addInvite.run(t.id, newCode());
+    },
     hasEntries: (tripId: string) => (q.hasEntries.get(tripId) as { yes: number }).yes === 1,
     getEntry: (id: string) => json<Entry>(q.getEntry.get(id)),
     listEntries: () => q.listEntries.all().map((r) => json<Entry>(r)!),
@@ -73,6 +96,22 @@ export function openDb(dataDir: string) {
     latestRate: (currency: string, home: string) => rate(q.latestRate.get(currency, home)),
     putRate: (date: string, currency: string, home: string, r: number) =>
       void q.putRate.run(date, currency, home, r),
+    listInvites: () =>
+      Object.fromEntries(
+        (q.listInvites.all() as { trip_id: string; code: string }[]).map((r) => [
+          r.trip_id,
+          r.code,
+        ]),
+      ),
+    liveTripForCode: (code: string) =>
+      (q.liveTripForCode.get(code) as { trip_id: string } | undefined)?.trip_id ?? null,
+    tripsForCodes: (codes: string[]) =>
+      (q.tripsForCodes.all(JSON.stringify(codes)) as { trip_id: string }[]).map((r) => r.trip_id),
+    rotateInvite: (tripId: string) => {
+      const code = newCode();
+      q.rotateInvite.run(code, tripId);
+      return code;
+    },
     close: () => db.close(),
   };
 }

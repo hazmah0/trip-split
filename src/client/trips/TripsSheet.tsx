@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { JoinForm } from '../gates/Gates.tsx';
 import { dayLabel, listNames, money } from '../lib/format.ts';
 import type { View } from '../lib/store.ts';
 import { summarize } from '../../shared/ledger.ts';
@@ -15,6 +17,7 @@ export function TripsSheet({
   onNew: () => void;
   onClose: () => void;
 }) {
+  const [joining, setJoining] = useState(false);
   return (
     <Sheet title="Your trips" onClose={onClose}>
       <ul className="mt-2 overflow-hidden card py-1">
@@ -51,9 +54,20 @@ export function TripsSheet({
           );
         })}
       </ul>
-      <button className="mt-4 btn-primary w-full" onClick={onNew}>
-        <Icon name="plus" size={20} /> New trip
-      </button>
+      {v.owner && (
+        <button className="mt-4 btn-primary w-full" onClick={onNew}>
+          <Icon name="plus" size={20} /> New trip
+        </button>
+      )}
+      {joining ? (
+        <div className="mt-4 card px-4 pt-4 pb-5">
+          <JoinForm onJoined={onClose} />
+        </div>
+      ) : (
+        <button className="mt-3 btn-outline w-full justify-center" onClick={() => setJoining(true)}>
+          Join a trip
+        </button>
+      )}
     </Sheet>
   );
 }

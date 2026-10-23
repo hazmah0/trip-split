@@ -8,6 +8,7 @@ import { selectTrip, useStore, type View } from './lib/store.ts';
 import type { Settlement } from '../shared/ledger.ts';
 import type { Entry, Person, Trip } from '../shared/types.ts';
 import { Stats } from './stats/Stats.tsx';
+import { Invite } from './trips/Invite.tsx';
 import { TripForm } from './trips/TripForm.tsx';
 import { TripsSheet } from './trips/TripsSheet.tsx';
 import { Icon } from './ui/Icon.tsx';
@@ -16,7 +17,10 @@ import { Sheet } from './ui/Sheet.tsx';
 export function App() {
   const v = useStore();
   if (v.auth === 'login') return <Login />;
-  if (!v.trip) return v.auth === 'unknown' ? <Splash online={v.online} /> : <FirstTrip />;
+  if (!v.trip) {
+    if (v.auth === 'unknown') return <Splash online={v.online} />;
+    return v.owner ? <FirstTrip /> : <Login noTrips />;
+  }
   if (v.me === null) return <WhoAmI trip={v.trip} />;
   return <Main v={v} trip={v.trip} me={v.me} />;
 }
@@ -123,9 +127,11 @@ function Main({ v, trip, me }: { v: View; trip: Trip; me: Person }) {
               trip={trip}
               me={me}
               hasEntries={v.entries.length > 0}
+              owner={v.owner}
               onDone={() => setTab('expenses')}
             />
           </div>
+          <Invite key={trip.id} trip={trip} code={v.invite} owner={v.owner} />
         </section>
       )}
 

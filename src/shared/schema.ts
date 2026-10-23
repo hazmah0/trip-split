@@ -7,10 +7,11 @@ const person = z
   .max(40)
   .refine((s) => s.trim().length > 0);
 const nonNegative = z.int().nonnegative();
+const cookieSafeId = z.string().regex(/^[\w-]{1,64}$/);
 
 export const TripSchema = z
   .object({
-    id: z.string(),
+    id: cookieSafeId,
     name: z.string().trim().min(1).max(80),
     names: z.array(person).min(2).max(MAX_PEOPLE),
     home: currency,
@@ -46,4 +47,4 @@ export const EntryInputSchema = z.object({
   deleted: z.boolean(),
 });
 
-export const LoginSchema = z.object({ passcode: z.string() });
+export const LoginSchema = z.object({ code: z.string().max(200) });

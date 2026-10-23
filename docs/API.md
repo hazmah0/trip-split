@@ -4,7 +4,7 @@ The JSON API served by `src/server/main.ts`. The web app is its only client. For
 
 ## Conventions
 
-- Request and response bodies are JSON. Request bodies are limited to 64 KB; a larger body gets 413.
+- Request and response bodies are JSON. Request bodies are limited to 64 KB; a larger body gets 413. A body that is not JSON gets 400 `invalid JSON`.
 - Every error response has the shape `{ "error": "<message>" }`. Validation errors name the first invalid field, for example `invalid entry.currency`.
 - Each `/api/*` response sends `Cache-Control: no-store`.
 - Amounts are integers in minor units; see [Money](ARCHITECTURE.md#money).
@@ -12,7 +12,17 @@ The JSON API served by `src/server/main.ts`. The web app is its only client. For
 
 ## Auth
 
-Every endpoint except `/api/health` and `/api/login` needs the `tb_session` cookie. Without a valid cookie, the server answers 401 `login required`. If `APP_PASSCODE` is unset, auth is off and every request is let through.
+Every endpoint except `/api/health` and `/api/login` needs a session cookie. There are two kinds (see [Auth](ARCHITECTURE.md#auth)):
+
+- `tb_session`: the owner. Sees and writes every trip, creates and deletes trips, and resets invite links.
+- `tb_t_<tripId>`: a member of that trip, holding the trip's invite code. One cookie per joined trip. A member sees and writes only those trips.
+
+| Status | Meaning |
+|---|---|
+| 401 `login required` | The cookies grant nothing: no cookie, or every invite code was reset. The client shows the Login screen. |
+| 403 | The session can't touch this trip: a member naming another trip, creating, deleting or restoring a trip, or resetting a link. The client keeps a rejected entry queued. |
+
+If `APP_PASSCODE` is unset, auth is off and every request is the owner.
 
 ```mermaid
 flowchart LR
@@ -20,10 +30,10 @@ flowchart LR
   L -- no --> E413[413]
   L -- yes --> P{health or login?}
   P -- yes --> H[handle]
-  P -- no --> C{valid session cookie?}
+  P -- no --> C{"owner cookie, or a<br/>current invite code?"}
   C -- no --> E401[401]
-  C -- yes --> V["validate (Zod),<br/>then trip and entry rules"]
-  V -- invalid --> E4xx["400 or 409"]
+  C -- yes --> V["validate (Zod),<br/>then access, trip and entry rules"]
+  V -- invalid --> E4xx["400, 403, 409 or 410"]
   V -- ok --> DB[(SQLite upsert)]
   DB --> OK[200 stored object]
 ```
@@ -33,10 +43,11 @@ flowchart LR
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | any | `/api/health` | No | Liveness check, used by the Docker `HEALTHCHECK` |
-| `POST` | `/api/login` | No | Exchange the passcode for a session cookie |
-| `GET` | `/api/state` | Yes | All live trips and entries |
-| `GET` | `/api/rates` | Yes | Latest exchange rates for every live trip |
-| `PUT` | `/api/trips/:id` | Yes | Create, update or delete a trip |
+| `POST` | `/api/login` | No | Exchange an invite code or the passcode for a session cookie |
+| `GET` | `/api/state` | Yes | The live trips and entries this session can see, with their invite codes |
+| `GET` | `/api/rates` | Yes | Latest exchange rates for those trips |
+| `PUT` | `/api/trips/:id` | Yes | Update a trip, or create, delete or restore one (owner only) |
+| `POST` | `/api/trips/:id/invite` | Owner | Reset the trip's invite link |
 | `PUT` | `/api/entries/:id` | Yes | Create, update or delete an entry |
 
 ### `GET|POST|… /api/health`
@@ -46,29 +57,34 @@ Returns `200 { "ok": true }`. Accepts any method.
 ### `POST /api/login`
 
 ```json
-{ "passcode": "a-long-shared-passcode" }
+{ "code": "Q2xh4Rk0b9Vn1sZp7Yt3wA" }
 ```
+
+`code` is a trip's invite code or the passcode, up to 200 characters. The server tries it as the code of a live trip first, then as the passcode. Cookies are `HttpOnly`, `SameSite=Lax`, one year, and `Secure` behind HTTPS.
 
 | Status | Meaning |
 |---|---|
-| 200 | `{ "ok": true }` and a `Set-Cookie: tb_session=…` header (`HttpOnly`, `SameSite=Lax`, one year, `Secure` behind HTTPS) |
-| 401 | `wrong passcode` |
+| 200 | `{ "tripId": "k3j2" }` and `Set-Cookie: tb_t_k3j2=<code>`: joined that trip |
+| 200 | `{ "tripId": null }` and `Set-Cookie: tb_session=…`: an owner session. When `APP_PASSCODE` is unset, every code that is not an invite code gets this answer. |
+| 404 | `that link or code didn't work`. Not 401, so a signed-in member is not sent to the Login screen. |
 | 429 | `too many attempts, wait 10 minutes`. There were 20 failed logins, from any client, within 10 minutes. |
 
 ### `GET /api/state`
 
-Returns every trip and entry that is not deleted, and leaves out entries that belong to a deleted trip.
+Returns every trip and entry this session can see that is not deleted, and leaves out entries that belong to a deleted trip.
 
 ```json
-{ "trips": [Trip], "entries": [Entry] }
+{ "trips": [Trip], "entries": [Entry], "invites": { "k3j2": "Q2xh4Rk0b9Vn1sZp7Yt3wA" }, "owner": false }
 ```
 
+- `invites` maps each listed trip to its current invite code.
+- `owner` is `true` for an owner session. The client uses it only to hide owner actions; the server enforces them.
 - `trips` are in creation order.
 - `entries` are sorted by `date` (newest first), then by `updatedAt` (newest first).
 
 ### `GET /api/rates`
 
-Returns the latest cached rate for each local currency of each live trip, grouped by home currency. A rate is in home units per 1 unit of the local currency. The server refreshes rates from frankfurter at most once an hour per pair. If frankfurter is unreachable, the server returns the cached rates instead.
+Returns the latest cached rate for each local currency of each live trip this session can see, grouped by home currency. A rate is in home units per 1 unit of the local currency. The server refreshes rates from frankfurter at most once an hour per pair. If frankfurter is unreachable, the server returns the cached rates instead.
 
 ```json
 { "SEK": { "KRW": 0.00747, "JPY": 0.0712 } }
@@ -106,7 +122,10 @@ Returns 200 with the stored trip.
 
 | Status | Error |
 |---|---|
-| 400 | `invalid trip.<field>`, or `No ECB exchange rates for XXX…` |
+| 400 | `invalid trip.<field>`, or `No ECB exchange rates for XXX…`. A trip `id` is 1–64 letters, digits, `_` or `-`, because it becomes part of a cookie name. |
+| 403 | `only the owner can create trips`: no trip with this id is stored. A tombstone counts as stored. |
+| 403 | `not a member of this trip` |
+| 403 | `only the owner can delete trips`: a member changed `deleted`, either way |
 | 409 | `home currency is fixed once the trip has entries` |
 | 409 | `travellers cannot be removed once the trip has entries` |
 
@@ -153,15 +172,25 @@ Returns 200 with the stored entry, which includes `rate` and `home`.
 | Status | Error |
 |---|---|
 | 400 | `invalid entry.<field>` |
-| 409 | `trip not found or deleted` |
+| 403 | `not a member of this trip`: the body's `tripId`, or the trip of the stored entry with this id. Checked before the stale-write rule, so a stored entry is never returned to a non-member. |
 | 409 | `an entry cannot move between trips` |
+| 410 | `trip not found or deleted`. The client drops the entry from its outbox. |
 | 502 | `rate unavailable: …`. Frankfurter failed, and no rate is cached for this currency pair. The client keeps the entry in its outbox and tries again later. |
+
+### `POST /api/trips/:id/invite`
+
+Owner only. Replaces the trip's invite code and returns `{ "code": "<new code>" }`. Every cookie holding the old code stops matching, so everyone who joined with the old link loses the trip until they open the new one.
+
+| Status | Error |
+|---|---|
+| 403 | `only the owner can reset invite links` |
+| 404 | `trip not found`: unknown or deleted |
 
 ## Everything else
 
 | Request | Response |
 |---|---|
-| Unknown `/api/*` path | 404 `not found` |
+| Unknown `/api/*` path | 404 `not found`, or 401 without a session |
 | `GET /assets/*` | Built file, `Cache-Control: public, max-age=31536000, immutable` |
 | Other `GET` with a file extension | The file if it exists (`no-cache`), otherwise 404 |
 | Other `GET` without an extension | `index.html` (single-page app fallback), or 404 `not built: run pnpm build` |

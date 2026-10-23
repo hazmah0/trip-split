@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { login, setMe } from '../lib/store.ts';
+import { login, setMe, useStore } from '../lib/store.ts';
 import type { Trip } from '../../shared/types.ts';
 import { TripForm } from '../trips/TripForm.tsx';
 import { Avatar, personStyle } from '../ui/people.tsx';
@@ -14,41 +14,59 @@ export function Splash({ online }: { online: boolean }) {
   );
 }
 
-export function Login() {
-  const [code, setCode] = useState('');
+export function JoinForm({ onJoined }: { onJoined?: () => void }) {
+  const { online, joinFailed } = useStore();
+  const [text, setText] = useState('');
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setError(!(await login(code)));
+    const ok = await login(text);
+    setError(!ok);
     setBusy(false);
+    if (ok) onJoined?.();
   }
   return (
+    <form className="flex flex-col gap-4" onSubmit={submit}>
+      <label className="field">
+        <span>Invite link, code or owner passcode</span>
+        <input
+          className="input"
+          autoFocus
+          autoCapitalize="none"
+          autoComplete="off"
+          spellCheck={false}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+        />
+      </label>
+      {(error || joinFailed) && (
+        <p className="error" role="alert">
+          {online
+            ? "That link or code didn't work. Ask whoever shared it for a fresh link."
+            : 'No connection. Try again once you are online.'}
+        </p>
+      )}
+      <button className="btn-primary" disabled={busy || !text.trim()}>
+        {busy ? 'Checking…' : 'Join'}
+      </button>
+    </form>
+  );
+}
+
+export function Login({ noTrips }: { noTrips?: boolean }) {
+  return (
     <main className="grid min-h-dvh place-items-center px-4 py-6">
-      <form className="flex w-full max-w-115 flex-col gap-4 card px-5 py-6" onSubmit={submit}>
+      <div className="flex w-full max-w-115 flex-col gap-4 card px-5 py-6">
         <h1 className="text-4xl font-extrabold">Trip Split</h1>
-        <p className="-mt-2 font-semibold text-soft">Enter the passcode your group shares.</p>
-        <label className="field">
-          <span>Passcode</span>
-          <input
-            className="input"
-            type="password"
-            autoFocus
-            autoComplete="current-password"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-          />
-        </label>
-        {error && (
-          <p className="error" role="alert">
-            That passcode didn't work. Check it with your travel group.
-          </p>
-        )}
-        <button className="btn-primary" disabled={busy || !code}>
-          {busy ? 'Checking…' : 'Unlock'}
-        </button>
-      </form>
+        <p className="-mt-2 font-semibold text-soft">
+          {noTrips
+            ? 'This phone has no trips yet. Paste an invite link to join one.'
+            : 'Paste the invite link your group shared. Opened it in Safari? Copy it and paste it here.'}
+        </p>
+        <JoinForm />
+      </div>
     </main>
   );
 }

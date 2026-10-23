@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, test } from 'vitest';
+import { createHmac } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -37,6 +38,7 @@ writeFileSync(join(dir, 'secret.txt'), 'secret');
 
 let app: Awaited<ReturnType<typeof start>>;
 let cookie = '';
+let member = '';
 beforeAll(async () => {
   app = await start({ port: 0, dataDir: join(dir, 'data'), passcode: 'hunter2', distDir: dist });
 });
@@ -46,12 +48,23 @@ afterAll(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-const api = (path: string, method = 'GET', body?: unknown) =>
-  realFetch(app.url + path, {
+const call = (jar: string, path: string, method = 'GET', body?: unknown, base = app.url) =>
+  realFetch(base + path, {
     method,
-    headers: { cookie, 'content-type': 'application/json' },
+    headers: { cookie: jar, 'content-type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+const api = (path: string, method = 'GET', body?: unknown) => call(cookie, path, method, body);
+const signIn = async (code: string) => {
+  const res = await call('', '/api/login', 'POST', { code });
+  return {
+    res,
+    cookie: res.headers
+      .getSetCookie()
+      .map((c) => c.split(';')[0])
+      .join('; '),
+  };
+};
 
 const trip = (p: Partial<Trip> = {}): Trip => ({
   id: 'a',
@@ -87,11 +100,12 @@ test('health needs no auth', async () => {
   expect((await api('/api/health')).status).toBe(200);
 });
 
-test('auth gate: 401 without cookie, wrong passcode rejected, right passcode sets a session cookie', async () => {
+test('auth gate: 401 without cookie, wrong code is 404, the passcode sets an owner session cookie', async () => {
   expect((await api('/api/state')).status).toBe(401);
-  expect((await api('/api/login', 'POST', { passcode: 'nope' })).status).toBe(401);
-  const res = await api('/api/login', 'POST', { passcode: 'hunter2' });
+  expect((await api('/api/login', 'POST', { code: 'nope' })).status).toBe(404);
+  const res = await api('/api/login', 'POST', { code: 'hunter2' });
   expect(res.status).toBe(200);
+  expect(await res.clone().json()).toStrictEqual({ tripId: null });
   const setCookie = res.headers.get('set-cookie') ?? '';
   expect(setCookie).toMatch(/HttpOnly/);
   expect(setCookie).toMatch(/SameSite=Lax/);
@@ -101,7 +115,7 @@ test('auth gate: 401 without cookie, wrong passcode rejected, right passcode set
 });
 
 test('a trip saves and comes back in state, with its name trimmed', async () => {
-  expect(await state()).toStrictEqual({ trips: [], entries: [] });
+  expect(await state()).toStrictEqual({ trips: [], entries: [], invites: {}, owner: true });
   const res = await api('/api/trips/a', 'PUT', trip({ name: '  Korea & Japan ' }));
   expect(res.status).toBe(200);
   expect(await res.json()).toStrictEqual(trip());
@@ -253,13 +267,13 @@ test('home currency cannot change once the trip has entries, but can before', as
   expect((await moved.json()).home).toBe('EUR');
 });
 
-test('an entry needs a live trip: unknown or deleted trip is 409', async () => {
+test('an entry needs a live trip: unknown or deleted trip is 410', async () => {
   expect((await api('/api/entries/x1', 'PUT', entry({ id: 'x1', tripId: 'nope' }))).status).toBe(
-    409,
+    410,
   );
   await api('/api/trips/gone', 'PUT', trip({ id: 'gone', deleted: true }));
   expect((await api('/api/entries/x1', 'PUT', entry({ id: 'x1', tripId: 'gone' }))).status).toBe(
-    409,
+    410,
   );
 });
 
@@ -400,6 +414,128 @@ test('latest rates are fetched once and shared across syncs', async () => {
   const calls = frankfurterCalls.length;
   await api('/api/rates');
   expect(frankfurterCalls.length).toBe(calls);
+});
+
+test('a member joined by invite code sees only that trip, its invite and its rates', async () => {
+  await api('/api/trips/m', 'PUT', trip({ id: 'm', name: 'Osaka', locals: ['JPY'] }));
+  await api('/api/entries/m1', 'PUT', entry({ id: 'm1', tripId: 'm', currency: 'SEK' }));
+  const code = (await state()).invites.m!;
+  expect(code).toMatch(/^[\w-]{22}$/);
+  const joined = await signIn(code);
+  expect(await joined.res.json()).toStrictEqual({ tripId: 'm' });
+  member = joined.cookie;
+  const s = (await (await call(member, '/api/state')).json()) as State;
+  expect(s.trips.map((t) => t.id)).toStrictEqual(['m']);
+  expect(s.entries.map((e) => e.id)).toStrictEqual(['m1']);
+  expect(s.invites).toStrictEqual({ m: code });
+  expect(s.owner).toBe(false);
+  expect(await (await call(member, '/api/rates')).json()).toStrictEqual({
+    SEK: { JPY: 1 / 15.836 },
+  });
+});
+
+test('a member writes only their own trip: other, new and deleted trips are 403', async () => {
+  const own = entry({ id: 'm2', tripId: 'm', currency: 'SEK' });
+  expect((await call(member, '/api/entries/m2', 'PUT', own)).status).toBe(200);
+  const rename = trip({ id: 'm', name: 'Osaka!', locals: ['JPY'], updatedAt: 1001 });
+  expect((await call(member, '/api/trips/m', 'PUT', rename)).status).toBe(200);
+  const drop = trip({ id: 'm', locals: ['JPY'], deleted: true, updatedAt: 2000 });
+  const denied = await call(member, '/api/trips/m', 'PUT', drop);
+  expect(denied.status).toBe(403);
+  expect((await denied.json()).error).toBe('only the owner can delete trips');
+  expect((await state()).trips.map((t) => t.id)).toContain('m');
+
+  const other = entry({ id: 'x9', tripId: 'a' });
+  expect((await call(member, '/api/entries/x9', 'PUT', other)).status).toBe(403);
+  const tripAEntry = 'e2';
+  const stale = entry({ id: tripAEntry, tripId: 'm', currency: 'SEK', updatedAt: 1 });
+  const echo = await call(member, `/api/entries/${tripAEntry}`, 'PUT', stale);
+  expect(echo.status).toBe(403);
+  expect(await echo.json(), 'no echo of the stored entry').not.toHaveProperty('id');
+  expect((await call(member, '/api/trips/n1', 'PUT', trip({ id: 'n1' }))).status).toBe(403);
+  const undelete = trip({ id: 'gone', updatedAt: 5000 });
+  expect((await call(member, '/api/trips/gone', 'PUT', undelete)).status).toBe(403);
+  expect((await state()).trips.map((t) => t.id)).not.toContain('n1');
+  expect((await state()).trips.map((t) => t.id)).not.toContain('gone');
+});
+
+test('a session cookie from before invites is still an owner session', async () => {
+  const old = `tb_session=${createHmac('sha256', 'hunter2').update('trip-split-session').digest('hex')}`;
+  const s = (await (await call(old, '/api/state')).json()) as State;
+  expect(s.owner).toBe(true);
+  expect(s.trips.map((t) => t.id)).toContain('a');
+  expect(s.trips.map((t) => t.id)).toContain('m');
+});
+
+test('only the owner resets a link; old cookies stop working and the new link joins', async () => {
+  expect((await call(member, '/api/trips/m/invite', 'POST')).status).toBe(403);
+  const old = (await state()).invites.m!;
+  const { code } = (await (await api('/api/trips/m/invite', 'POST')).json()) as { code: string };
+  expect(code).not.toBe(old);
+  expect((await state()).invites.m).toBe(code);
+  expect((await call(member, '/api/state')).status, 'm was its only trip').toBe(401);
+  expect((await signIn(old)).res.status).toBe(404);
+  const fresh = await signIn(code);
+  expect(await fresh.res.json()).toStrictEqual({ tripId: 'm' });
+  member = fresh.cookie;
+  expect((await call(member, '/api/state')).status).toBe(200);
+});
+
+test('only the cookie value grants access: a code under another trip name still opens just its trip', async () => {
+  const code = (await state()).invites.m!;
+  const res = await call(`tb_t_a=${code}`, '/api/state');
+  expect(res.status, 'a valid code is accepted under any cookie name').toBe(200);
+  expect(((await res.json()) as State).trips.map((t) => t.id)).toStrictEqual(['m']);
+  expect((await call('tb_t_m=not-a-code', '/api/state')).status).toBe(401);
+});
+
+test('a member of a deleted trip gets 410 for its entries and stays signed in', async () => {
+  await api(
+    '/api/trips/m',
+    'PUT',
+    trip({ id: 'm', locals: ['JPY'], deleted: true, updatedAt: 3000 }),
+  );
+  const late = entry({ id: 'm3', tripId: 'm', currency: 'SEK' });
+  expect((await call(member, '/api/entries/m3', 'PUT', late)).status).toBe(410);
+  const s = await call(member, '/api/state');
+  expect(s.status).toBe(200);
+  expect(((await s.json()) as State).trips).toStrictEqual([]);
+  const revive = trip({ id: 'm', locals: ['JPY'], updatedAt: 4000 });
+  expect((await call(member, '/api/trips/m', 'PUT', revive)).status, 'no undelete').toBe(403);
+  expect((await state()).trips.map((t) => t.id)).not.toContain('m');
+});
+
+test('wrong codes count toward the login brake', async () => {
+  const other = await start({
+    port: 0,
+    dataDir: join(dir, 'brake'),
+    passcode: 'pw',
+    distDir: dist,
+  });
+  const login = (code: string) => call('', '/api/login', 'POST', { code }, other.url);
+  try {
+    for (let i = 0; i < 20; i++) expect((await login('nope')).status).toBe(404);
+    expect((await login('pw')).status, 'braked even for the right passcode').toBe(429);
+  } finally {
+    await other.close();
+  }
+});
+
+test('with no passcode everyone is the owner, as before invites', async () => {
+  const open = await start({ port: 0, dataDir: join(dir, 'open'), passcode: '', distDir: dist });
+  const req = (path: string, method = 'GET', body?: unknown) =>
+    call('', path, method, body, open.url);
+  try {
+    expect((await req('/api/trips/a', 'PUT', trip())).status).toBe(200);
+    const s = (await (await req('/api/state')).json()) as State;
+    expect(s.owner).toBe(true);
+    expect(s.trips).toStrictEqual([trip()]);
+    expect(await (await req('/api/login', 'POST', { code: 'anything' })).json()).toStrictEqual({
+      tripId: null,
+    });
+  } finally {
+    await open.close();
+  }
 });
 
 test('static: immutable assets, SPA fallback, no traversal', async () => {
