@@ -57,6 +57,8 @@ Checks:
 
 ```sh
 pnpm typecheck
+pnpm lint        # oxlint; warnings fail it too
+pnpm format:check
 pnpm test        # ledger, parsing and API tests (Vitest)
 pnpm build
 ```
