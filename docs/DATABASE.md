@@ -38,6 +38,11 @@ CREATE TABLE IF NOT EXISTS rates (
 );
 -- Its own table, not trips.json, so /api/state never serves a code by accident. Rows are never deleted.
 CREATE TABLE IF NOT EXISTS invites (trip_id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE);
+CREATE TABLE IF NOT EXISTS push (
+  trip_id TEXT NOT NULL, device TEXT NOT NULL, code TEXT,
+  endpoint TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL,
+  PRIMARY KEY (trip_id, device)
+);
 ```
 
 `trips` and `entries` store the whole validated object as JSON in `json`, and the server reads it back from there. The other columns copy the fields that SQL itself needs: the last-write-wins `WHERE` in the upsert, the sort order, and the join and index on `trip_id`. Any other field is read with `json ->> '<field>'`. For example, `json ->> 'deleted' = 0` keeps the rows that are not deleted, because `->>` turns JSON `false` into `0`.
@@ -56,8 +61,15 @@ CREATE TABLE IF NOT EXISTS invites (trip_id TEXT PRIMARY KEY, code TEXT NOT NULL
 | | `rate` | Home units per 1 unit of `currency`. Past dates are fetched once and kept. The hourly latest refresh stores its rates under the date that frankfurter returns. |
 | `invites` | `trip_id` | The trip this code joins. One row per trip. |
 | | `code` | The current invite code: 16 random bytes in base64url, 22 characters. `UNIQUE`, which also gives the index that login lookups use. |
+| `push` | `trip_id`, `device` | One row per browser that wants notifications for a trip. `device` is the `tb_device` cookie. Together they are the primary key. |
+| | `code` | The invite code the member's cookie held when they subscribed, or `NULL` for the owner |
+| | `endpoint`, `p256dh`, `auth` | The browser's `PushSubscription`. One endpoint belongs to one device. |
 
-Invite codes are secrets. Anyone who has one can join its trip, so treat a copy of `travel.db` like a password file.
+Invite codes are secrets. Anyone who has one can join its trip, so treat a copy of `travel.db` like a password file. A `push` row, together with the VAPID private key, lets its holder send notifications to that browser.
+
+### Why `push` stores the invite code
+
+A member's push row is valid only while its `code` is the trip's current code. `hasPush` and `pushTargets` join `invites` and drop the other rows, so a link reset turns off every member's notifications without a write to `push`. Deleting member rows on reset would also work, but every later path that changes a code would have to remember it. And `PUT /api/push/:tripId` checks access before it reads the body, so a subscribe that runs during a reset could still insert a row after the delete and keep notifying a member who lost the trip. Rows with a stale code stay in the table, a few per reset. They are harmless, and `DELETE FROM push WHERE code IS NOT NULL AND code NOT IN (SELECT code FROM invites)` clears them.
 
 ### Invite backfill on start
 
@@ -73,7 +85,7 @@ After the `CREATE` statements, `openDb` finds every trip without an `invites` ro
 | `listTrips` | Live trips, ordered by `rowid`. An upsert keeps the `rowid`, so this is creation order. | `visibleTrips`, for `GET /api/state` and `GET /api/rates` |
 | `putTrip` | Last-write-wins upsert: `ON CONFLICT (id) DO UPDATE … WHERE excluded.updated_at > trips.updated_at` | `db.putTrip`, from `PUT /api/trips/:id` |
 | `hasEntries` | Whether the trip has a live entry | The two 409 checks in `putTrip` |
-| `getEntry` | One entry by id, tombstones included | `putEntry`, for the access and stale-write checks and for the response |
+| `getEntry` | One entry by id, tombstones included | `putEntry`, for the access and stale-write checks and for the response. `db.putEntry`, just before its upsert, to tell a new entry from an update. Push bursts, to re-read their entries. |
 | `listEntries` | Live entries of live trips, newest `date` first, then newest `updated_at` | `visibleState`, for `GET /api/state` |
 | `putEntry` | Last-write-wins upsert, the same shape as `putTrip` | `putEntry`, from `PUT /api/entries/:id` |
 | `getRate` | The cached rate for one date and pair | `rateFor` in `rates.ts`, for past dates |
@@ -85,6 +97,11 @@ After the `CREATE` statements, `openDb` finds every trip without an `invites` ro
 | `tripsForCodes` | The trips whose current code is in a JSON array of codes, read with `json_each`. Tombstones are included. | The auth gate, through `resolveAccess` |
 | `rotateInvite` | Replace a trip's code | `POST /api/trips/:id/invite` |
 | `tripsWithoutInvite` | Trips, tombstones included, that have no `invites` row | The startup backfill in `openDb` |
+| `putPush`, `movePush`, `dropOtherDevices` | Upsert the device's row for the trip, copy the new endpoint and keys to the device's other rows, and delete that endpoint from any other device | `db.putPush`, from `PUT /api/push/:tripId` |
+| `dropPush` | Delete one device's row for a trip | `DELETE /api/push/:tripId` |
+| `dropEndpoint` | Delete every row with an endpoint | A push service answered 404 or 410 |
+| `hasPush` | Whether the device has a valid row for the trip (owner, or current invite code) | All three `/api/push/:tripId` routes |
+| `pushTargets` | Every valid row for the trip | Sending a push burst |
 
 ## Inspect the database
 

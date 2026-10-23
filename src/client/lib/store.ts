@@ -222,6 +222,11 @@ export async function login(linkCodeOrPasscode: string): Promise<boolean> {
 }
 
 export async function boot() {
+  const linked = new URLSearchParams(location.search).get('trip');
+  if (linked) {
+    selectTrip(linked);
+    history.replaceState(null, '', location.pathname + location.hash);
+  }
   const code = inviteCode(location.hash);
   if (!code) return sync();
   // Offline keeps #join= for a retry, so only a server rejection counts as failed.

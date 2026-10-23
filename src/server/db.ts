@@ -2,14 +2,14 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { Entry, Trip } from '../shared/types.ts';
+import type { Entry, PushTarget, Trip } from '../shared/types.ts';
 
 export type Db = ReturnType<typeof openDb>;
 
 const json = <T>(row: unknown): T | null =>
   row ? (JSON.parse((row as { json: string }).json) as T) : null;
 const rate = (row: unknown): number | null => (row ? (row as { rate: number }).rate : null);
-const newCode = () => randomBytes(16).toString('base64url');
+export const newCode = () => randomBytes(16).toString('base64url');
 
 export function openDb(dataDir: string) {
   mkdirSync(dataDir, { recursive: true });
@@ -26,7 +26,14 @@ export function openDb(dataDir: string) {
       PRIMARY KEY (date, currency, home)
     );
     CREATE TABLE IF NOT EXISTS invites (trip_id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE);
+    CREATE TABLE IF NOT EXISTS push (
+      trip_id TEXT NOT NULL, device TEXT NOT NULL, code TEXT,
+      endpoint TEXT NOT NULL, p256dh TEXT NOT NULL, auth TEXT NOT NULL,
+      PRIMARY KEY (trip_id, device)
+    );
   `);
+  const livePush = `push p LEFT JOIN invites i ON i.trip_id = p.trip_id
+    WHERE p.trip_id = ? AND (p.code IS NULL OR p.code = i.code)`;
 
   const q = {
     getTrip: db.prepare('SELECT json FROM trips WHERE id = ?'),
@@ -72,6 +79,17 @@ export function openDb(dataDir: string) {
     tripsWithoutInvite: db.prepare(
       'SELECT id FROM trips WHERE id NOT IN (SELECT trip_id FROM invites)',
     ),
+    putPush: db.prepare(`
+      INSERT INTO push (trip_id, device, code, endpoint, p256dh, auth) VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT (trip_id, device) DO UPDATE SET
+        code = excluded.code, endpoint = excluded.endpoint, p256dh = excluded.p256dh, auth = excluded.auth
+    `),
+    movePush: db.prepare('UPDATE push SET endpoint = ?, p256dh = ?, auth = ? WHERE device = ?'),
+    dropOtherDevices: db.prepare('DELETE FROM push WHERE endpoint = ? AND device <> ?'),
+    dropPush: db.prepare('DELETE FROM push WHERE trip_id = ? AND device = ?'),
+    dropEndpoint: db.prepare('DELETE FROM push WHERE endpoint = ?'),
+    hasPush: db.prepare(`SELECT EXISTS (SELECT 1 FROM ${livePush} AND p.device = ?) AS yes`),
+    pushTargets: db.prepare(`SELECT p.device, p.endpoint, p.p256dh, p.auth FROM ${livePush}`),
   };
   function backfillInvites() {
     for (const { id } of q.tripsWithoutInvite.all() as { id: string }[])
@@ -89,8 +107,12 @@ export function openDb(dataDir: string) {
     hasEntries: (tripId: string) => (q.hasEntries.get(tripId) as { yes: number }).yes === 1,
     getEntry: (id: string) => json<Entry>(q.getEntry.get(id)),
     listEntries: () => q.listEntries.all().map((r) => json<Entry>(r)!),
-    putEntry: (e: Entry) =>
-      void q.putEntry.run(e.id, e.tripId, e.date, e.updatedAt, JSON.stringify(e)),
+    putEntry: (e: Entry) => {
+      const existed = q.getEntry.get(e.id) !== undefined;
+      const changed =
+        q.putEntry.run(e.id, e.tripId, e.date, e.updatedAt, JSON.stringify(e)).changes > 0;
+      return { changed, created: changed && !existed };
+    },
     getRate: (date: string, currency: string, home: string) =>
       rate(q.getRate.get(date, currency, home)),
     latestRate: (currency: string, home: string) => rate(q.latestRate.get(currency, home)),
@@ -112,6 +134,22 @@ export function openDb(dataDir: string) {
       q.rotateInvite.run(code, tripId);
       return code;
     },
+    putPush: (p: { tripId: string; device: string; code: string | null } & PushTarget) => {
+      q.putPush.run(p.tripId, p.device, p.code, p.endpoint, p.keys.p256dh, p.keys.auth);
+      q.movePush.run(p.endpoint, p.keys.p256dh, p.keys.auth, p.device);
+      q.dropOtherDevices.run(p.endpoint, p.device);
+    },
+    dropPush: (tripId: string, device: string) => void q.dropPush.run(tripId, device),
+    dropEndpoint: (endpoint: string) => void q.dropEndpoint.run(endpoint),
+    hasPush: (tripId: string, device: string) =>
+      (q.hasPush.get(tripId, device) as { yes: number }).yes === 1,
+    pushTargets: (tripId: string) =>
+      q.pushTargets.all(tripId) as {
+        device: string;
+        endpoint: string;
+        p256dh: string;
+        auth: string;
+      }[],
     close: () => db.close(),
   };
 }

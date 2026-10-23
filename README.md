@@ -13,6 +13,7 @@ One Node service (Hono + Zod) serves both the API and the built web app, and sto
 - An invite link per trip. Travellers who join with it see only that trip.
 - Stats per trip: by category, by country, day by day, and how much each of you paid versus used.
 - Works offline. Expenses added without signal wait on the phone and sync when you're back online.
+- Notifications. A phone that turns them on hears when someone else adds an expense or a payment. Several saved at once arrive as one notification. On iPhone this needs the app on the home screen (iOS 16.4 or later).
 - Installable PWA: on iOS use Share, then Add to Home Screen.
 
 ## Run with Docker
@@ -39,6 +40,15 @@ Open the app and enter `APP_PASSCODE` to sign in as the owner, then create a tri
 | `APP_PASSCODE` | unset | The owner's passcode. Travellers never need it; they join with a trip's invite link. The owner sees every trip, creates and deletes trips, and resets invite links. If unset, everyone is the owner and the app is open to anyone; only do that locally. |
 | `PORT` | `8080` | HTTP port |
 | `DATA_DIR` | `/data` (Docker), `./data` (local) | Where `travel.db` lives |
+| `VAPID_PUBLIC_KEY` | unset | Public key for push notifications. Set all three `VAPID_*` variables or none; with none, notifications are off and the Trip tab hides them. Setting only some, or an invalid key or subject, stops the server at start. |
+| `VAPID_PRIVATE_KEY` | unset | Private key for push notifications. Keep it secret. |
+| `VAPID_SUBJECT` | unset | Contact for push services, as `mailto:you@example.com` or an `https://` URL. |
+
+To turn on notifications, generate a key pair once and keep it. A new pair breaks every existing subscription until each phone turns notifications on again.
+
+```sh
+pnpm exec web-push generate-vapid-keys
+```
 
 To back up, copy `travel.db` with the server stopped, or take a `VACUUM INTO` snapshot while it runs. See [Back up and restore](docs/DATABASE.md#back-up-and-restore).
 

@@ -9,6 +9,7 @@ import type { Access, Env } from './access.ts';
 import type { Db } from './db.ts';
 import type { Notify } from './events.ts';
 import { parse, readJson } from './http.ts';
+import type { Push } from './push.ts';
 import { rateFor } from './rates.ts';
 
 function authorizeEntryWrite(a: Access, input: EntryInput, stored: Entry | null) {
@@ -23,7 +24,7 @@ async function putEntry(
   a: Access,
   id: string,
   body: unknown,
-): Promise<{ saved: Entry; changed: boolean }> {
+): Promise<{ saved: Entry; changed: boolean; created: boolean }> {
   const input = parse('entry', EntryInputSchema, body, id);
   const stored = db.getEntry(id);
   authorizeEntryWrite(a, input, stored);
@@ -37,7 +38,8 @@ async function putEntry(
     throw new HTTPException(400, { message: 'invalid entry.paidBy' });
   if (input.shares.length > trip.names.length)
     throw new HTTPException(400, { message: 'invalid entry.shares' });
-  if (stored && stored.updatedAt >= input.updatedAt) return { saved: stored, changed: false };
+  if (stored && stored.updatedAt >= input.updatedAt)
+    return { saved: stored, changed: false, created: false };
 
   const rate =
     input.currency === trip.home
@@ -48,18 +50,23 @@ async function putEntry(
           : await rateFor(db, input.date, input.currency, trip.home).catch((err: Error) => {
               throw new HTTPException(502, { message: `rate unavailable: ${err.message}` });
             })));
-  db.putEntry({ ...input, rate, home: toHome(input.amount, input.currency, rate, trip.home) });
-  return { saved: db.getEntry(id)!, changed: true };
+  const { changed, created } = db.putEntry({
+    ...input,
+    rate,
+    home: toHome(input.amount, input.currency, rate, trip.home),
+  });
+  return { saved: db.getEntry(id)!, changed, created: created && !input.deleted };
 }
 
-export const entryRoutes = (db: Db, notify: Notify) =>
+export const entryRoutes = (db: Db, notify: Notify, announce: Push['created']) =>
   new Hono<Env>().put('/:id', async (c) => {
-    const { saved, changed } = await putEntry(
+    const { saved, changed, created } = await putEntry(
       db,
       c.get('access'),
       c.req.param('id'),
       await readJson(c),
     );
     if (changed) notify(saved.tripId);
+    if (created) announce(saved, c);
     return c.json(saved);
   });

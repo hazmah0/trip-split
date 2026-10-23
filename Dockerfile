@@ -7,7 +7,6 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
 
-# The server runs from TypeScript source and needs only the production deps (hono, zod).
 FROM node:24-slim
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable pnpm && corepack prepare pnpm@9.12.3 --activate

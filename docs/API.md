@@ -18,6 +18,8 @@ Every endpoint except `/api/health` and `/api/login` needs a session cookie. The
 - `tb_session`: the owner. Sees and writes every trip, creates and deletes trips, and resets invite links.
 - `tb_t_<tripId>`: a member of that trip, holding the trip's invite code. One cookie per joined trip. A member sees and writes only those trips.
 
+A third cookie, `tb_device`, names the browser and grants nothing. The server sets it on the first `PUT /api/push/:tripId` and reads it to leave a device's own saves out of its notifications. It has the same attributes as the session cookies.
+
 | Status | Meaning |
 |---|---|
 | 401 `login required` | The cookies grant nothing: no cookie, or every invite code was reset. The client shows the Login screen. |
@@ -51,6 +53,9 @@ flowchart LR
 | `PUT` | `/api/trips/:id` | Yes | Update a trip, or create, delete or restore one (owner only) |
 | `POST` | `/api/trips/:id/invite` | Owner | Reset the trip's invite link |
 | `PUT` | `/api/entries/:id` | Yes | Create, update or delete an entry |
+| `GET` | `/api/push/:tripId` | Yes | The push public key, and whether this device gets notifications for the trip |
+| `PUT` | `/api/push/:tripId` | Yes | Turn on notifications for the trip on this device |
+| `DELETE` | `/api/push/:tripId` | Yes | Turn them off |
 
 ### `GET|POST|… /api/health`
 
@@ -204,6 +209,34 @@ Owner only. Replaces the trip's invite code and returns `{ "code": "<new code>" 
 |---|---|
 | 403 | `only the owner can reset invite links` |
 | 404 | `trip not found`: unknown or deleted |
+
+### `GET|PUT|DELETE /api/push/:tripId`
+
+Web Push subscriptions for one trip on this device. The routes exist only when the server has VAPID keys (see the README). Without them every `/api/push/*` request gets 404 `not found`, and the client hides the Notifications card. All three answer 200 with:
+
+```json
+{ "key": "BDKGoBITmCq663xpmf7HauZup4Si…", "on": true }
+```
+
+- `key` is the VAPID public key the browser subscribes with. The server sends it at runtime because the Docker image builds the client once, without keys.
+- `on` is `true` when this device's `tb_device` cookie has a subscription for the trip that is still valid. A member's subscription stops being valid when the trip's invite link is reset, and stays off after they rejoin until they turn it on again.
+
+`PUT` takes the browser's `PushSubscription.toJSON()`:
+
+```json
+{ "endpoint": "https://fcm.googleapis.com/fcm/send/…", "keys": { "p256dh": "…", "auth": "…" } }
+```
+
+The server stores it under this device and trip, and sets `tb_device` if the request had none. Repeating the call is harmless. The same endpoint replaces the keys on all of the device's trips and is removed from any other device. `DELETE` removes this device's subscription for the trip; the browser keeps its subscription for other trips.
+
+After a new expense or settle-up payment is saved, the server waits until no new one has arrived on that trip for 3 seconds, then sends one notification to each other subscribed device. The device that saved an entry is never told about it. Edits and deletes send nothing. A push service that answers 404 or 410 has dropped the subscription, so the server deletes it.
+
+| Status | Error |
+|---|---|
+| 400 | `unsupported push service`: the endpoint is not `https`, or its host is not FCM, Mozilla, Apple or Windows push |
+| 400 | `invalid subscription`: `keys` is missing or malformed |
+| 403 | `not a member of this trip` |
+| 404 | `trip not found`: `PUT` on an unknown or deleted trip |
 
 ## Everything else
 

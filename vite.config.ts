@@ -11,6 +11,7 @@ export default defineConfig({
       injectRegister: false,
       manifest: false,
       workbox: {
+        importScripts: ['push-sw.js'],
         globPatterns: ['**/*.{html,js,css,woff2,svg,png,webmanifest}'],
         navigateFallback: null,
         // Keep / out of the precache route so navigations stay network-first like every other path.

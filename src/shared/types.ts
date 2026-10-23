@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { EntryInputSchema, TripSchema } from './schema.ts';
+import type { EntryInputSchema, PushSubscriptionSchema, TripSchema } from './schema.ts';
 
 export type Person = number;
 
@@ -30,6 +30,8 @@ export type Trip = z.infer<typeof TripSchema>;
 export type EntryInput = z.infer<typeof EntryInputSchema>;
 
 export type Entry = Omit<EntryInput, 'rate'> & { rate: number; home: number };
+
+export type PushTarget = z.infer<typeof PushSubscriptionSchema>;
 
 export type State = {
   trips: Trip[];

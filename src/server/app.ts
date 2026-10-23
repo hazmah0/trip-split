@@ -7,6 +7,7 @@ import type { Env } from './access.ts';
 import type { Db } from './db.ts';
 import { entryRoutes } from './entries.ts';
 import type { createEvents } from './events.ts';
+import type { Push } from './push.ts';
 import { stateRoutes } from './state.ts';
 import { staticRoutes } from './static.ts';
 import { tripRoutes } from './trips.ts';
@@ -16,9 +17,10 @@ type AppDeps = {
   passcode: string;
   distDir: string;
   events: ReturnType<typeof createEvents>;
+  push: Push;
 };
 
-export function createApp({ db, passcode, distDir, events }: AppDeps) {
+export function createApp({ db, passcode, distDir, events, push }: AppDeps) {
   // Order matters: health and login answer before the access gate, everything after it needs a session.
   const api = new Hono<Env>()
     .use(
@@ -33,7 +35,8 @@ export function createApp({ db, passcode, distDir, events }: AppDeps) {
     .route('/', stateRoutes(db))
     .route('/', events.routes)
     .route('/trips', tripRoutes(db, events.notify))
-    .route('/entries', entryRoutes(db, events.notify))
+    .route('/entries', entryRoutes(db, events.notify, push.created))
+    .route('/push', push.routes)
     .all('*', (c) => c.notFound());
 
   const app = new Hono<Env>();

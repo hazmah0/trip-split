@@ -48,3 +48,12 @@ export const EntryInputSchema = z.object({
 });
 
 export const LoginSchema = z.object({ code: z.string().max(200) });
+
+// shortcut: allowlist of known push services, add a host if a browser's push service is rejected
+const ALLOWED_PUSH_HOSTS =
+  /(^|\.)(fcm\.googleapis\.com|push\.services\.mozilla\.com|push\.apple\.com|notify\.windows\.com)$/;
+
+export const PushSubscriptionSchema = z.object({
+  endpoint: z.url({ protocol: /^https$/, hostname: ALLOWED_PUSH_HOSTS }).max(1000),
+  keys: z.object({ p256dh: z.string().max(200), auth: z.string().max(100) }),
+});

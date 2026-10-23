@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Hono } from 'hono';
-import type { MiddlewareHandler } from 'hono';
+import type { Context, MiddlewareHandler } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
 import { HTTPException } from 'hono/http-exception';
 import { LoginSchema } from '../shared/schema.ts';
@@ -20,6 +20,22 @@ export function need(a: Access, tripId: string) {
 }
 export function ownerOnly(a: Access, why: string) {
   if (!a.owner) throw new HTTPException(403, { message: why });
+}
+
+export const cookieAttrs = (c: Context) =>
+  ({
+    path: '/',
+    maxAge: 31536000,
+    httpOnly: true,
+    sameSite: 'Lax',
+    secure: c.req.header('x-forwarded-proto') === 'https',
+  }) as const;
+
+export function inviteCodeOf(c: Context<Env>, tripId: string): string | null {
+  if (c.get('access').owner) return null;
+  const code = getCookie(c, TRIP_COOKIE + tripId);
+  if (!code) throw new HTTPException(403, { message: 'not a member of this trip' });
+  return code;
 }
 
 function resolveAccess(
@@ -58,8 +74,7 @@ export function loginRoutes(db: Db, passcode: string) {
       throw new HTTPException(UNKNOWN_CODE, { message: "that link or code didn't work" });
     }
 
-    const secure = c.req.header('x-forwarded-proto') === 'https';
-    const attrs = { path: '/', maxAge: 31536000, httpOnly: true, sameSite: 'Lax', secure } as const;
+    const attrs = cookieAttrs(c);
     if (tripId) setCookie(c, TRIP_COOKIE + tripId, code, attrs);
     else setCookie(c, COOKIE, token.toString(), attrs);
     return c.json({ tripId });

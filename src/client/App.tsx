@@ -9,6 +9,7 @@ import type { Settlement } from '../shared/ledger.ts';
 import type { Entry, Person, Trip } from '../shared/types.ts';
 import { Stats } from './stats/Stats.tsx';
 import { Invite } from './trips/Invite.tsx';
+import { Notifications } from './trips/Notifications.tsx';
 import { TripForm } from './trips/TripForm.tsx';
 import { TripsSheet } from './trips/TripsSheet.tsx';
 import { Header, type Tab } from './Header.tsx';
@@ -103,6 +104,7 @@ function Main({ v, trip, me }: { v: View; trip: Trip; me: Person }) {
             />
           </div>
           <Invite key={trip.id} trip={trip} code={v.invite} owner={v.owner} />
+          <Notifications key={trip.id} tripId={trip.id} online={v.online} />
         </section>
       )}
 

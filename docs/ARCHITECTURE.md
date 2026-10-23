@@ -40,8 +40,9 @@ flowchart LR
 | Path | Runs on | Contents |
 |---|---|---|
 | `src/shared/` | Both | `schema.ts` (Zod schemas), `types.ts` (types derived from them), `ledger.ts` (money math, balances, settlements, stats) |
-| `src/server/` | Node | `main.ts` (startup and shutdown), `app.ts` (middleware and route mounting), `access.ts` (login and the access gate), `trips.ts` and `entries.ts` (write rules), `state.ts` (state and rates reads), `events.ts` (SSE), `static.ts` (the built web app), `db.ts` (SQLite), `rates.ts` (exchange rates) |
-| `src/client/lib/` | Browser | `store.ts` (state, outbox, sync), `api.ts` (fetch and `HttpError`), `storage.ts` (`localStorage` keys), `format.ts`, `csv.ts`, `labels.ts` |
+| `src/server/` | Node | `main.ts` (startup and shutdown), `app.ts` (middleware and route mounting), `access.ts` (login and the access gate), `trips.ts` and `entries.ts` (write rules), `state.ts` (state and rates reads), `events.ts` (SSE), `push.ts` (Web Push), `static.ts` (the built web app), `db.ts` (SQLite), `rates.ts` (exchange rates) |
+| `src/client/lib/` | Browser | `store.ts` (state, outbox, sync), `api.ts` (fetch and `HttpError`), `push.ts` (browser push subscription), `storage.ts` (`localStorage` keys), `format.ts`, `csv.ts`, `labels.ts` |
+| `public/push-sw.js` | Service worker | Push and notification-click handlers, imported by the generated `sw.js` |
 | `src/client/` other folders | Browser | React components, grouped by screen: `expenses/`, `trips/`, `stats/`, `gates/`, `ui/` |
 
 The server runs from TypeScript source with Node's built-in type stripping, so there is no server build step. That is why `tsconfig.json` sets `erasableSyntaxOnly`. Vite builds only the client, into `dist/`.
@@ -210,9 +211,31 @@ The stream carries no trip or entry data. It is only a nudge. All data still arr
 
 `EventSource` reconnects by itself after a network drop, and the client syncs on every `open` to catch up on what it missed. A 401 or an error status closes the stream for good. The next sync opens a new one, so coming back online, returning to the app, or the 60-second timer revives it. The server works out a stream's trips once, when it opens, so a successful login closes the stream and the sync after it opens one that covers the newly joined trip. The 60-second sync stays as a fallback for a stream that a proxy holds open but no longer delivers.
 
+### Push notifications
+
+Live updates reach only an open app. Web Push reaches a phone with the app closed. It is off unless the server has the three `VAPID_*` variables; then `src/server/push.ts` serves `/api/push/:tripId` and the Trip tab shows a **Notifications** card. The server sends pushes itself with the `web-push` package. No third-party service holds the subscriptions.
+
+- **Trigger.** `entryRoutes` calls `push.created` when a write creates a live entry: an expense or a settle-up payment. `db.putEntry` decides "created" from the row it read just before the upsert, with no `await` in between, so a retry, an edit, a delete, a tombstone for an entry the server never saw, or a write that loses the last-write-wins race announces nothing. `events.notify` is the wrong hook, because it also fires for edits, deletes, trip saves and link resets.
+- **Coalescing.** Each trip has one pending burst of entry ids. Every new entry restarts its 3-second timer, so an outbox flush of several entries, a few hundred milliseconds apart, becomes one notification. When the timer fires, the server re-reads the trip and the entries, so an entry deleted within the window is dropped and a deleted trip sends nothing. A notification shows up to three lines (`Ada paid 45 000 KRW for Dinner`, `Ada paid Bo 300 SEK`) and then `+N more`. Amounts use the currency code, because `money()` is client code and is not in the Docker image.
+- **Exclusion.** A device is a browser profile, named by the `tb_device` cookie that the first subscribe sets. Each burst remembers which device saved each entry, and each recipient gets only the entries another device saved. A device with nothing left gets no notification. The client sends nothing extra: the cookie rides on the entry `PUT` it already makes.
+- **Revocation.** A member's push row stores the invite code their cookie held when they subscribed. Reads keep a row only if that code is still the trip's code, so a link reset turns off every member's notifications without touching the `push` table, and a subscribe racing a reset cannot store a grant that outlives it. Owner rows store no code.
+- **Cleanup.** A push service that answers 404 or 410 has dropped the subscription, so the server deletes every row with that endpoint. Other failures are logged with the push service's host only and the row stays.
+
+On the client, `lib/push.ts` asks for permission as the first `await` of the tap, because iOS shows the prompt only inside the user gesture, then subscribes through the service worker and sends `PushSubscription.toJSON()`. Turning notifications off deletes the server row and keeps the browser subscription, which other trips may use. The card renders nothing when the server has push off. In a browser without push support, which includes Safari outside the home-screen app and `pnpm dev`, it shows how to install the app instead.
+
+Known limits:
+
+- Owner subscriptions survive an `APP_PASSCODE` change.
+- A browser that clears its cookies but keeps its push subscription gets notified of its own saves until it turns notifications on again.
+- Bursts still waiting when the server shuts down are lost.
+- `pushsubscriptionchange` is not handled. A subscription the browser rotates stops working until the user turns notifications on again.
+- After a VAPID key change, old subscriptions fail with a status other than 404 or 410. The server logs those failures and keeps the rows.
+
 ### Service worker
 
 `vite-plugin-pwa` builds `sw.js`. It precaches the app shell: HTML, JS, CSS, fonts and icons. Page navigations are network-first with a 3-second timeout, and fall back to the cached `index.html`. API responses are never cached, because the server sends `Cache-Control: no-store`. `localStorage` holds the offline data, not the service worker.
+
+The generated `sw.js` also loads `public/push-sw.js` through Workbox's `importScripts`. That file is plain JavaScript and is not type-checked. It shows a notification for every push, since iOS revokes a subscription whose push shows nothing. A tap on a notification focuses an open window and navigates it to `/?trip=<id>`, or opens a new one. `boot()` in `store.ts` selects that trip and removes the query from the URL. There is no service worker in `pnpm dev`, so push only works in a production build.
 
 ### Client state in `localStorage`
 
@@ -330,13 +353,15 @@ flowchart LR
 
 Failed logins count globally, not per IP, because client IPs are unreliable behind a proxy. A wrong code or passcode gets 404, not 401, so a member who pastes a bad second link is not sent to the Login screen. After 20 failures within 10 minutes, the server answers 429 until older failures expire, for codes and the passcode alike. When `APP_PASSCODE` is unset, the server logs a warning and treats every request as the owner.
 
+The `tb_device` cookie is identity, not access. It is a random id set on the first push subscribe, the gate never reads it, and it grants nothing. See [Push notifications](#push-notifications).
+
 A home-screen app on iOS keeps its own cookies, separate from Safari's. A link opened in Safari therefore does not sign in the installed app, so the app's Login screen and the **Join a trip** row in the trips sheet accept a pasted link.
 
 ## Tests
 
 | File | What it covers |
 |---|---|
-| `src/server/api.test.ts` | The real server, started on a random port with a temporary data directory. `fetch` to frankfurter is stubbed. |
+| `src/server/api.test.ts` | The real server, started on a random port with a temporary data directory. `fetch` to frankfurter is stubbed. Push tests start a second server with a fake sender passed as `start({ push })`, because `web-push` does not use `fetch`, and assert on the payloads it receives. |
 | `src/client/lib/store.test.ts` | The client store and outbox, syncing against a real server |
 | `src/shared/ledger.test.ts` | Rounding, allocation, balances, settlements |
 | `src/client/lib/*.test.ts` | Formatting and CSV export |
