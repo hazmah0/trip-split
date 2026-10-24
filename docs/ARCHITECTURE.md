@@ -233,7 +233,7 @@ Known limits:
 
 ### Service worker
 
-`vite-plugin-pwa` builds `sw.js`. It precaches the app shell: HTML, JS, CSS, fonts and icons. Page navigations are network-first with a 3-second timeout, and fall back to the cached `index.html`. API responses are never cached, because the server sends `Cache-Control: no-store`. `localStorage` holds the offline data, not the service worker.
+`vite-plugin-pwa` builds `sw.js`. It precaches the app shell: HTML, JS, CSS, fonts and icons. Page navigations, except under `/api/`, get the precached `index.html` without waiting for the network, so a launch on a weak connection is as fast as one on wifi. The worker checks for a new `sw.js` on each launch and takes over as soon as it installs, but the page that is already open keeps the old bundle, so a deploy shows up on the launch after that. API responses are never cached, because the server sends `Cache-Control: no-store`. `localStorage` holds the offline data, not the service worker.
 
 The generated `sw.js` also loads `public/push-sw.js` through Workbox's `importScripts`. That file is plain JavaScript and is not type-checked. It shows a notification for every push, since iOS revokes a subscription whose push shows nothing. A tap on a notification focuses an open window and navigates it to `/?trip=<id>`, or opens a new one. `boot()` in `store.ts` selects that trip and removes the query from the URL. There is no service worker in `pnpm dev`, so push only works in a production build.
 
