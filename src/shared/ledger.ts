@@ -100,6 +100,10 @@ export function transferShares(to: Person): number[] {
   return Array.from({ length: to + 1 }, (_, i) => (i === to ? 1 : 0));
 }
 
+export function picked(shares: number[]): Person[] {
+  return shares.flatMap((w, i) => (w > 0 ? [i] : []));
+}
+
 export function receiver(e: Pick<Entry, 'shares'>): Person {
   return e.shares.findIndex((w) => w > 0);
 }

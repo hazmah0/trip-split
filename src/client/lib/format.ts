@@ -19,14 +19,13 @@ const numberFormats = new Map<number, Intl.NumberFormat>();
 export function money(minor: number, currency: string, opts: { cents?: boolean } = {}): string {
   const digits = opts.cents ? decimals(currency) : 0;
   let f = numberFormats.get(digits);
-  if (!f)
-    numberFormats.set(
-      digits,
-      (f = new Intl.NumberFormat('sv-SE', {
-        minimumFractionDigits: digits,
-        maximumFractionDigits: digits,
-      })),
-    );
+  if (!f) {
+    f = new Intl.NumberFormat('sv-SE', {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+    numberFormats.set(digits, f);
+  }
   const n = f.format(toMajor(minor, currency));
   const s = currencySymbol(currency);
   return /^\p{L}+$/u.test(s) ? `${n} ${s}` : `${s}${n}`;
@@ -78,12 +77,12 @@ export function groupAmount(text: string, currency: string): string {
   const sep = d > 0 ? Math.max(t.lastIndexOf(','), t.lastIndexOf('.')) : -1;
   const int = (sep >= 0 ? t.slice(0, sep) : t).replace(/[.,]/g, '').replace(/^0+(?=\d)/, '');
   const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-  return sep >= 0
-    ? `${grouped},${t
-        .slice(sep + 1)
-        .replace(/[.,]/g, '')
-        .slice(0, d)}`
-    : grouped;
+  if (sep < 0) return grouped;
+  const fraction = t
+    .slice(sep + 1)
+    .replace(/[.,]/g, '')
+    .slice(0, d);
+  return `${grouped},${fraction}`;
 }
 
 export function majorText(minor: number, currency: string) {

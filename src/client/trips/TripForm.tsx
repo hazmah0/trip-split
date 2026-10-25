@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type KeyboardEvent } from 'react';
+import { useState, type ComponentProps, type FormEvent, type KeyboardEvent } from 'react';
 import { majorText, money, parseAmount } from '../lib/format.ts';
 import { HttpError } from '../lib/api.ts';
 import { addTraveller, saveTrip, setMe, updateTraveller } from '../lib/store.ts';
@@ -30,6 +30,35 @@ const blurOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
   e.preventDefault();
   e.currentTarget.blur();
 };
+
+function NameField({
+  remove,
+  ...input
+}: ComponentProps<'input'> & {
+  remove?: { label: string; disabled?: boolean; onClick: () => void };
+}) {
+  return (
+    <div className="relative flex">
+      <input
+        className={`input min-w-0 flex-1 ${remove ? 'pr-12' : ''}`}
+        required
+        maxLength={40}
+        {...input}
+      />
+      {remove && (
+        <button
+          type="button"
+          className="absolute top-0.75 right-0.75 btn-icon"
+          aria-label={remove.label}
+          disabled={remove.disabled}
+          onClick={remove.onClick}
+        >
+          <Icon name="close" size={18} />
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function TripForm({
   trip,
@@ -216,53 +245,41 @@ export function TripForm({
                     </div>
                   );
                 return (
-                  <div key={p} className="relative flex">
-                    <input
-                      className={`input min-w-0 flex-1 ${canRemove ? 'pr-12' : ''}`}
-                      required
-                      maxLength={40}
-                      value={edits[p] ?? t.name}
-                      aria-label={`Traveller ${p + 1}`}
-                      onChange={(e) => setEdits({ ...edits, [p]: e.target.value })}
-                      onBlur={() => void act(() => commitRename(trip, p))}
-                      onKeyDown={blurOnEnter}
-                    />
-                    {canRemove && (
-                      <button
-                        type="button"
-                        className="absolute top-0.75 right-0.75 btn-icon"
-                        aria-label={`Remove ${t.name}`}
-                        disabled={submitting || !!blocked}
-                        onClick={() => removeTraveller(trip, p)}
-                      >
-                        <Icon name="close" size={18} />
-                      </button>
-                    )}
-                  </div>
+                  <NameField
+                    key={p}
+                    value={edits[p] ?? t.name}
+                    aria-label={`Traveller ${p + 1}`}
+                    onChange={(e) => setEdits({ ...edits, [p]: e.target.value })}
+                    onBlur={() => void act(() => commitRename(trip, p))}
+                    onKeyDown={blurOnEnter}
+                    remove={
+                      canRemove
+                        ? {
+                            label: `Remove ${t.name}`,
+                            disabled: submitting || !!blocked,
+                            onClick: () => removeTraveller(trip, p),
+                          }
+                        : undefined
+                    }
+                  />
                 );
               })
             : names.map((n, i) => (
-                <div key={i} className="relative flex">
-                  <input
-                    className={`input min-w-0 flex-1 ${i >= MIN_ACTIVE ? 'pr-12' : ''}`}
-                    required
-                    maxLength={40}
-                    value={n}
-                    aria-label={i === 0 ? 'Your name' : `Traveller ${i + 1}`}
-                    placeholder={i === 0 ? 'Your name' : `Traveller ${i + 1}`}
-                    onChange={(e) => setNames(names.map((x, j) => (j === i ? e.target.value : x)))}
-                  />
-                  {i >= MIN_ACTIVE && (
-                    <button
-                      type="button"
-                      className="absolute top-0.75 right-0.75 btn-icon"
-                      aria-label={`Remove ${n || `traveller ${i + 1}`}`}
-                      onClick={() => setNames(names.filter((_, j) => j !== i))}
-                    >
-                      <Icon name="close" size={18} />
-                    </button>
-                  )}
-                </div>
+                <NameField
+                  key={i}
+                  value={n}
+                  aria-label={i === 0 ? 'Your name' : `Traveller ${i + 1}`}
+                  placeholder={i === 0 ? 'Your name' : `Traveller ${i + 1}`}
+                  onChange={(e) => setNames(names.map((x, j) => (j === i ? e.target.value : x)))}
+                  remove={
+                    i >= MIN_ACTIVE
+                      ? {
+                          label: `Remove ${n || `traveller ${i + 1}`}`,
+                          onClick: () => setNames(names.filter((_, j) => j !== i)),
+                        }
+                      : undefined
+                  }
+                />
               ))}
           {trip && draft !== null && (
             <input

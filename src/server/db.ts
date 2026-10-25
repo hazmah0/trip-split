@@ -9,6 +9,8 @@ export type Db = ReturnType<typeof openDb>;
 const json = <T>(row: unknown): T | null =>
   row ? (JSON.parse((row as { json: string }).json) as T) : null;
 const rate = (row: unknown): number | null => (row ? (row as { rate: number }).rate : null);
+const yes = (row: unknown) => (row as { yes: number }).yes === 1;
+
 export const newCode = () => randomBytes(16).toString('base64url');
 
 export function openDb(dataDir: string) {
@@ -32,6 +34,7 @@ export function openDb(dataDir: string) {
       PRIMARY KEY (trip_id, device)
     );
   `);
+
   const livePush = `push p LEFT JOIN invites i ON i.trip_id = p.trip_id
     WHERE p.trip_id = ? AND (p.code IS NULL OR p.code = i.code)`;
 
@@ -51,6 +54,7 @@ export function openDb(dataDir: string) {
       "SELECT id, json FROM trips WHERE json ->> 'travellers' IS NULL",
     ),
     setTripJson: db.prepare('UPDATE trips SET json = ? WHERE id = ?'),
+
     hasEntries: db.prepare(
       "SELECT EXISTS (SELECT 1 FROM entries WHERE trip_id = ? AND json ->> 'deleted' = 0) AS yes",
     ),
@@ -70,6 +74,7 @@ export function openDb(dataDir: string) {
         trip_id = excluded.trip_id, date = excluded.date, updated_at = excluded.updated_at, json = excluded.json
       WHERE excluded.updated_at > entries.updated_at
     `),
+
     getRate: db.prepare('SELECT rate FROM rates WHERE date = ? AND currency = ? AND home = ?'),
     latestRate: db.prepare(
       'SELECT rate FROM rates WHERE currency = ? AND home = ? ORDER BY date DESC LIMIT 1',
@@ -77,6 +82,7 @@ export function openDb(dataDir: string) {
     putRate: db.prepare(
       'INSERT OR REPLACE INTO rates (date, currency, home, rate) VALUES (?, ?, ?, ?)',
     ),
+
     addInvite: db.prepare('INSERT OR IGNORE INTO invites (trip_id, code) VALUES (?, ?)'),
     listInvites: db.prepare('SELECT trip_id, code FROM invites'),
     liveTripForCode: db.prepare(
@@ -89,6 +95,7 @@ export function openDb(dataDir: string) {
     tripsWithoutInvite: db.prepare(
       'SELECT id FROM trips WHERE id NOT IN (SELECT trip_id FROM invites)',
     ),
+
     putPush: db.prepare(`
       INSERT INTO push (trip_id, device, code, endpoint, p256dh, auth) VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT (trip_id, device) DO UPDATE SET
@@ -101,6 +108,7 @@ export function openDb(dataDir: string) {
     hasPush: db.prepare(`SELECT EXISTS (SELECT 1 FROM ${livePush} AND p.device = ?) AS yes`),
     pushTargets: db.prepare(`SELECT p.device, p.endpoint, p.p256dh, p.auth FROM ${livePush}`),
   };
+
   function backfillInvites() {
     for (const { id } of q.tripsWithoutInvite.all() as { id: string }[])
       q.addInvite.run(id, newCode());
@@ -126,7 +134,8 @@ export function openDb(dataDir: string) {
     },
     setTravellers: (tripId: string, travellers: Traveller[]) =>
       void q.setTravellers.run(JSON.stringify(travellers), tripId),
-    hasEntries: (tripId: string) => (q.hasEntries.get(tripId) as { yes: number }).yes === 1,
+
+    hasEntries: (tripId: string) => yes(q.hasEntries.get(tripId)),
     tripEntries: (tripId: string) => q.tripEntries.all(tripId).map((r) => json<Entry>(r)!),
     getEntry: (id: string) => json<Entry>(q.getEntry.get(id)),
     listEntries: () => q.listEntries.all().map((r) => json<Entry>(r)!),
@@ -136,18 +145,15 @@ export function openDb(dataDir: string) {
         q.putEntry.run(e.id, e.tripId, e.date, e.updatedAt, JSON.stringify(e)).changes > 0;
       return { changed, created: changed && !existed };
     },
+
     getRate: (date: string, currency: string, home: string) =>
       rate(q.getRate.get(date, currency, home)),
     latestRate: (currency: string, home: string) => rate(q.latestRate.get(currency, home)),
     putRate: (date: string, currency: string, home: string, r: number) =>
       void q.putRate.run(date, currency, home, r),
-    listInvites: () =>
-      Object.fromEntries(
-        (q.listInvites.all() as { trip_id: string; code: string }[]).map((r) => [
-          r.trip_id,
-          r.code,
-        ]),
-      ),
+
+    listInvites: (): Record<string, string> =>
+      Object.fromEntries(q.listInvites.all().map((r) => [r.trip_id, r.code])),
     liveTripForCode: (code: string) =>
       (q.liveTripForCode.get(code) as { trip_id: string } | undefined)?.trip_id ?? null,
     tripsForCodes: (codes: string[]) =>
@@ -157,6 +163,7 @@ export function openDb(dataDir: string) {
       q.rotateInvite.run(code, tripId);
       return code;
     },
+
     putPush: (p: { tripId: string; device: string; code: string | null } & PushTarget) => {
       q.putPush.run(p.tripId, p.device, p.code, p.endpoint, p.keys.p256dh, p.keys.auth);
       q.movePush.run(p.endpoint, p.keys.p256dh, p.keys.auth, p.device);
@@ -164,8 +171,7 @@ export function openDb(dataDir: string) {
     },
     dropPush: (tripId: string, device: string) => void q.dropPush.run(tripId, device),
     dropEndpoint: (endpoint: string) => void q.dropEndpoint.run(endpoint),
-    hasPush: (tripId: string, device: string) =>
-      (q.hasPush.get(tripId, device) as { yes: number }).yes === 1,
+    hasPush: (tripId: string, device: string) => yes(q.hasPush.get(tripId, device)),
     pushTargets: (tripId: string) =>
       q.pushTargets.all(tripId) as {
         device: string;
@@ -173,6 +179,7 @@ export function openDb(dataDir: string) {
         p256dh: string;
         auth: string;
       }[],
+
     close: () => db.close(),
   };
 }

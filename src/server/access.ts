@@ -38,19 +38,8 @@ export function inviteCodeOf(c: Context<Env>, tripId: string): string | null {
   return code;
 }
 
-function resolveAccess(
-  cookies: Record<string, string>,
-  isOwner: boolean,
-  tripsForCodes: (codes: string[]) => string[],
-): Access {
-  if (isOwner) return { owner: true };
-  const codes = Object.entries(cookies)
-    .filter(([name]) => name.startsWith(TRIP_COOKIE))
-    .map(([, code]) => code);
-  return { owner: false, trips: new Set(tripsForCodes(codes)) };
-}
-
-const sha256 = (s: string) => createHmac('sha256', 'trip-split').update(s).digest();
+// Fixed-length digests, so timingSafeEqual can compare codes of any length.
+const digest = (s: string) => createHmac('sha256', 'trip-split').update(s).digest();
 const sessionToken = (passcode: string) =>
   Buffer.from(
     passcode ? createHmac('sha256', passcode).update('trip-split-session').digest('hex') : '',
@@ -69,7 +58,7 @@ export function loginRoutes(db: Db, passcode: string) {
       throw new HTTPException(429, { message: 'too many attempts, wait 10 minutes' });
 
     const tripId = code ? db.liveTripForCode(code) : null;
-    if (!tripId && passcode && !timingSafeEqual(sha256(code), sha256(passcode))) {
+    if (!tripId && passcode && !timingSafeEqual(digest(code), digest(passcode))) {
       failures.push(now);
       throw new HTTPException(UNKNOWN_CODE, { message: "that link or code didn't work" });
     }
@@ -87,10 +76,17 @@ export function requireAccess(db: Db, passcode: string): MiddlewareHandler<Env> 
   return async (c, next) => {
     const got = Buffer.from(getCookie(c, COOKIE) ?? '');
     const isOwner = !passcode || (got.length === token.length && timingSafeEqual(got, token));
-    const access = resolveAccess(getCookie(c), isOwner, db.tripsForCodes);
-    if (!access.owner && !access.trips.size)
-      throw new HTTPException(401, { message: 'login required' });
-    c.set('access', access);
-    await next();
+    if (isOwner) {
+      c.set('access', { owner: true });
+      return next();
+    }
+
+    const codes = Object.entries(getCookie(c))
+      .filter(([name]) => name.startsWith(TRIP_COOKIE))
+      .map(([, code]) => code);
+    const trips = new Set(db.tripsForCodes(codes));
+    if (!trips.size) throw new HTTPException(401, { message: 'login required' });
+    c.set('access', { owner: false, trips });
+    return next();
   };
 }

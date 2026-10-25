@@ -6,7 +6,7 @@ import { loginRoutes, requireAccess } from './access.ts';
 import type { Env } from './access.ts';
 import type { Db } from './db.ts';
 import { entryRoutes } from './entries.ts';
-import type { createEvents } from './events.ts';
+import type { Events } from './events.ts';
 import type { Push } from './push.ts';
 import { stateRoutes } from './state.ts';
 import { staticRoutes } from './static.ts';
@@ -16,7 +16,7 @@ type AppDeps = {
   db: Db;
   passcode: string;
   distDir: string;
-  events: ReturnType<typeof createEvents>;
+  events: Events;
   push: Push;
 };
 

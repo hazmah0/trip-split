@@ -1,17 +1,9 @@
 import { useState, type FormEvent } from 'react';
-import {
-  authorsLine,
-  currencySymbol,
-  groupAmount,
-  majorText,
-  money,
-  parseAmount,
-  today,
-} from '../lib/format.ts';
+import { authorsLine, groupAmount, majorText, money, parseAmount, today } from '../lib/format.ts';
 import { CATEGORY_LABEL } from '../lib/labels.ts';
 import { KEY, read, write } from '../lib/storage.ts';
 import { deleteEntry, saveEntry } from '../lib/store.ts';
-import { toHome, toMajor } from '../../shared/ledger.ts';
+import { picked, toHome, toMajor } from '../../shared/ledger.ts';
 import { everyone } from '../../shared/travellers.ts';
 import {
   CATEGORIES,
@@ -20,6 +12,7 @@ import {
   type Person,
   type Trip,
 } from '../../shared/types.ts';
+import { AmountField, DateField } from '../ui/fields.tsx';
 import { Icon } from '../ui/Icon.tsx';
 import { PersonPicker } from '../ui/people.tsx';
 import { Sheet } from '../ui/Sheet.tsx';
@@ -68,7 +61,7 @@ export function EntrySheet({
   const local = currency !== home;
   const autoRate = rates[currency];
   const estimate = amount && local && autoRate ? toHome(amount, currency, autoRate, home) : null;
-  const who = shares.filter((w) => w > 0).length;
+  const who = picked(shares).length;
   const authors = entry && authorsLine(entry, trip);
 
   function submit(e: FormEvent) {
@@ -106,24 +99,18 @@ export function EntrySheet({
     <Sheet title={entry ? 'Edit expense' : 'Add expense'} onClose={onClose}>
       <form className="flex flex-col gap-4.5 pt-2" onSubmit={submit} noValidate>
         <div className="flex flex-col gap-2.5">
-          <label className="amount-field">
-            <span className="sr-only">Amount in {currency}</span>
-            <span className="text-4xl font-extrabold text-soft" aria-hidden="true">
-              {currencySymbol(currency)}
-            </span>
-            <input
-              data-autofocus={!entry || undefined}
-              inputMode="decimal"
-              enterKeyHint="next"
-              placeholder="0"
-              value={amountText}
-              onChange={(e) => {
-                setAmountText(groupAmount(e.target.value, currency));
-                setError('');
-              }}
-              aria-invalid={!!error && !amount}
-            />
-          </label>
+          <AmountField
+            currency={currency}
+            data-autofocus={!entry || undefined}
+            enterKeyHint="next"
+            placeholder="0"
+            value={amountText}
+            onChange={(e) => {
+              setAmountText(groupAmount(e.target.value, currency));
+              setError('');
+            }}
+            aria-invalid={!!error && !amount}
+          />
           <div className="segmented" role="radiogroup" aria-label="Currency">
             {[...trip.locals, home].map((c) => (
               <button
@@ -230,16 +217,7 @@ export function EntrySheet({
           />
         </label>
 
-        <label className="field">
-          <span>Date</span>
-          <input
-            className="input"
-            type="date"
-            value={date}
-            required
-            onChange={(e) => setDate(e.target.value || today())}
-          />
-        </label>
+        <DateField value={date} required onChange={(e) => setDate(e.target.value || today())} />
 
         {error && (
           <p className="error" role="alert">

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { inviteUrl, rotateInvite } from '../lib/store.ts';
 import type { Trip } from '../../shared/types.ts';
+import { SettingsCard } from './SettingsCard.tsx';
 
 export function Invite({ trip, code, owner }: { trip: Trip; code: string | null; owner: boolean }) {
   const [note, setNote] = useState('');
@@ -39,13 +40,15 @@ export function Invite({ trip, code, owner }: { trip: Trip; code: string | null;
   }
 
   return (
-    <div className="mx-4 mt-4 flex flex-col gap-3 card px-4 pt-4.5 pb-5 wide:mx-0">
-      <h2 className="text-3xl font-extrabold">Invite</h2>
-      <p className="hint">
-        {url
+    <SettingsCard
+      title="Invite"
+      hint={
+        url
           ? 'Anyone with the link can see this trip and add expenses.'
-          : 'The invite link appears once this phone is back online.'}
-      </p>
+          : 'The invite link appears once this phone is back online.'
+      }
+      note={note}
+    >
       <div className="form-actions">
         {owner && (
           <button type="button" className="btn-outline" disabled={busy || !url} onClick={reset}>
@@ -56,11 +59,6 @@ export function Invite({ trip, code, owner }: { trip: Trip; code: string | null;
           Share invite link
         </button>
       </div>
-      {note && (
-        <p className="hint" role="status">
-          {note}
-        </p>
-      )}
-    </div>
+    </SettingsCard>
   );
 }

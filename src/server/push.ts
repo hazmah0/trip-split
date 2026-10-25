@@ -11,7 +11,7 @@ import { cookieAttrs, inviteCodeOf, need } from './access.ts';
 import type { Env } from './access.ts';
 import { newCode } from './db.ts';
 import type { Db } from './db.ts';
-import { readJson } from './http.ts';
+import { liveTrip, readJson } from './http.ts';
 
 export type SendPush = (to: PushTarget, payload: string) => Promise<'sent' | 'gone'>;
 export type PushConfig = { publicKey: string; send: SendPush; delayMs?: number };
@@ -127,8 +127,7 @@ export function createPush(db: Db, config: PushConfig | null) {
     .put('/:tripId', async (c) => {
       const tripId = c.req.param('tripId');
       need(c.get('access'), tripId);
-      const trip = db.getTrip(tripId);
-      if (!trip || trip.deleted) throw new HTTPException(404, { message: 'trip not found' });
+      liveTrip(db, tripId);
       const sub = PushSubscriptionSchema.safeParse(await readJson(c));
       if (!sub.success)
         throw new HTTPException(400, {

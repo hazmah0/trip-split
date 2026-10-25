@@ -145,23 +145,24 @@ export function Stats({ entries, trip }: { entries: Entry[]; trip: Trip }) {
       <section className={panel}>
         <h2 className={heading}>Day by day</h2>
         <ol>
-          {days.toReversed().map((d) => (
-            <li
-              key={d}
-              className="grid grid-cols-[7em_minmax(0,1fr)_auto] items-center gap-2.5 py-1.25 text-sm font-semibold"
-            >
-              <span className="whitespace-nowrap text-soft">{dayLabel(d)}</span>
-              <span className="bar h-2.5" aria-hidden="true">
-                <i
-                  style={{ width: `${(s.byDay.get(d)! / maxDay) * 100}%` }}
-                  className={`bar-fill ${s.byDay.get(d)! > perDay ? '' : 'bg-quiet-bar'}`}
-                />
-              </span>
-              <span className="min-w-[5em] text-right font-extrabold">
-                {money(s.byDay.get(d)!, home)}
-              </span>
-            </li>
-          ))}
+          {days.toReversed().map((d) => {
+            const spent = s.byDay.get(d)!;
+            return (
+              <li
+                key={d}
+                className="grid grid-cols-[7em_minmax(0,1fr)_auto] items-center gap-2.5 py-1.25 text-sm font-semibold"
+              >
+                <span className="whitespace-nowrap text-soft">{dayLabel(d)}</span>
+                <span className="bar h-2.5" aria-hidden="true">
+                  <i
+                    style={{ width: `${(spent / maxDay) * 100}%` }}
+                    className={`bar-fill ${spent > perDay ? '' : 'bg-quiet-bar'}`}
+                  />
+                </span>
+                <span className="min-w-[5em] text-right font-extrabold">{money(spent, home)}</span>
+              </li>
+            );
+          })}
         </ol>
         <p className="mt-2 hint">
           Darker bars are days above your {money(perDay, home)} daily average.

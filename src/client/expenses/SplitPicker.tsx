@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import { money } from '../lib/format.ts';
-import { allocate } from '../../shared/ledger.ts';
+import { allocate, picked } from '../../shared/ledger.ts';
 import { everyone, isEveryone, label } from '../../shared/travellers.ts';
 import type { Trip } from '../../shared/types.ts';
 import { Icon } from '../ui/Icon.tsx';
 import { Dot, personStyle, pickable, SplitBadge } from '../ui/people.tsx';
-
-const picked = (shares: number[]) => shares.flatMap((w, i) => (w > 0 ? [i] : []));
 
 export function SplitPicker({
   trip,

@@ -1,6 +1,8 @@
 import type { Context } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import type { z } from 'zod';
+import type { Trip } from '../shared/types.ts';
+import type { Db } from './db.ts';
 
 export const readJson = (c: Context) =>
   c.req.json<unknown>().catch(() => {
@@ -20,7 +22,7 @@ export function parseBody<T extends z.ZodType>(
   return r.data;
 }
 
-export function parse<T extends z.ZodType<{ id: string }>>(
+export function parseWithId<T extends z.ZodType<{ id: string }>>(
   what: string,
   schema: T,
   body: unknown,
@@ -29,4 +31,10 @@ export function parse<T extends z.ZodType<{ id: string }>>(
   const data = parseBody(what, schema, body);
   if (data.id !== id) throw new HTTPException(400, { message: `invalid ${what}.id` });
   return data;
+}
+
+export function liveTrip(db: Db, id: string): Trip {
+  const trip = db.getTrip(id);
+  if (!trip || trip.deleted) throw new HTTPException(404, { message: 'trip not found' });
+  return trip;
 }

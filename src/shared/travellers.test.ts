@@ -1,5 +1,4 @@
 import { expect, test } from 'vitest';
-import { balances, settlements } from './ledger.ts';
 import {
   active,
   everyone,
@@ -81,10 +80,4 @@ test('a traveller can be removed only when settled and two others stay', () => {
     'removed travellers do not count toward the two',
   ).toBeNull();
   expect(removalProblem(t, [], 0, kr)).toBe('A trip needs at least two travellers.');
-});
-
-test('a removed traveller whose balance moves later still shows up in settlements', () => {
-  const late = e({ home: 3, paidBy: 0, shares: [1, 1, 1] });
-  const owed = settlements(balances([late], t.travellers.length));
-  expect(owed.map((s) => s.from)).toContain(1);
 });

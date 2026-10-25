@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { clearMe, login, selectTrip, setMe, useStore } from '../lib/store.ts';
 import { active, label } from '../../shared/travellers.ts';
 import type { Trip } from '../../shared/types.ts';
@@ -6,6 +6,18 @@ import { TripForm } from '../trips/TripForm.tsx';
 import { TripsSheet } from '../trips/TripsSheet.tsx';
 import { Avatar, personStyle } from '../ui/people.tsx';
 import { Sheet } from '../ui/Sheet.tsx';
+
+function Gate({ title, lead, children }: { title: string; lead: ReactNode; children: ReactNode }) {
+  return (
+    <main className="grid min-h-dvh place-items-center px-4 py-6">
+      <div className="flex w-full max-w-115 flex-col gap-4 card px-5 py-6">
+        <h1 className="text-4xl font-extrabold">{title}</h1>
+        <p className="-mt-2 font-semibold text-soft">{lead}</p>
+        {children}
+      </div>
+    </main>
+  );
+}
 
 export function Splash({ online }: { online: boolean }) {
   return (
@@ -60,58 +72,50 @@ export function JoinForm({ onJoined }: { onJoined?: () => void }) {
 
 export function Login({ noTrips }: { noTrips?: boolean }) {
   return (
-    <main className="grid min-h-dvh place-items-center px-4 py-6">
-      <div className="flex w-full max-w-115 flex-col gap-4 card px-5 py-6">
-        <h1 className="text-4xl font-extrabold">Trip Split</h1>
-        <p className="-mt-2 font-semibold text-soft">
-          {noTrips
-            ? 'This phone has no trips yet. Paste an invite link to join one.'
-            : 'Paste the invite link your group shared. Opened it in Safari? Copy it and paste it here.'}
-        </p>
-        <JoinForm />
-      </div>
-    </main>
+    <Gate
+      title="Trip Split"
+      lead={
+        noTrips
+          ? 'This phone has no trips yet. Paste an invite link to join one.'
+          : 'Paste the invite link your group shared. Opened it in Safari? Copy it and paste it here.'
+      }
+    >
+      <JoinForm />
+    </Gate>
   );
 }
 
 export function FirstTrip() {
   return (
-    <main className="grid min-h-dvh place-items-center px-4 py-6">
-      <div className="flex w-full max-w-115 flex-col gap-4 card px-5 py-6">
-        <h1 className="text-4xl font-extrabold">Start your first trip</h1>
-        <p className="-mt-2 font-semibold text-soft">
-          Your travel group, one fair balance. Every expense is converted to your home currency at
-          that day's rate.
-        </p>
-        <TripForm onDone={() => {}} />
-      </div>
-    </main>
+    <Gate
+      title="Start your first trip"
+      lead="Your travel group, one fair balance. Every expense is converted to your home currency at that day's rate."
+    >
+      <TripForm onDone={() => {}} />
+    </Gate>
   );
 }
 
 export function WhoAmI({ trip }: { trip: Trip }) {
   return (
-    <main className="grid min-h-dvh place-items-center px-4 py-6">
-      <div className="flex w-full max-w-115 flex-col gap-4 card px-5 py-6">
-        <h1 className="text-4xl font-extrabold">Whose phone is this?</h1>
-        <p className="-mt-2 font-semibold text-soft">
-          On {trip.name}, new expenses on this phone default to being paid by you.
-        </p>
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
-          {active(trip).map((i) => (
-            <button
-              key={i}
-              className="flex flex-col items-center gap-2 rounded-card bg-ground px-2 py-4.5 text-lg font-extrabold transition-[transform,background-color] duration-200 ease-spring hover:bg-sand active:scale-96"
-              style={personStyle(i)}
-              onClick={() => setMe(trip.id, i)}
-            >
-              <Avatar p={i} name={label(trip, i)} big />
-              {label(trip, i)}
-            </button>
-          ))}
-        </div>
+    <Gate
+      title="Whose phone is this?"
+      lead={`On ${trip.name}, new expenses on this phone default to being paid by you.`}
+    >
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
+        {active(trip).map((i) => (
+          <button
+            key={i}
+            className="flex flex-col items-center gap-2 rounded-card bg-ground px-2 py-4.5 text-lg font-extrabold transition-[transform,background-color] duration-200 ease-spring hover:bg-sand active:scale-96"
+            style={personStyle(i)}
+            onClick={() => setMe(trip.id, i)}
+          >
+            <Avatar p={i} name={label(trip, i)} big />
+            {label(trip, i)}
+          </button>
+        ))}
       </div>
-    </main>
+    </Gate>
   );
 }
 
@@ -120,19 +124,18 @@ export function RemovedGate({ trip }: { trip: Trip }) {
   const [sheet, setSheet] = useState<'trips' | 'new-trip' | null>(null);
   const close = () => setSheet(null);
   return (
-    <main className="grid min-h-dvh place-items-center px-4 py-6">
-      <div className="flex w-full max-w-115 flex-col gap-4 card px-5 py-6">
-        <h1 className="text-4xl font-extrabold">You were removed from this trip</h1>
-        <p className="-mt-2 font-semibold text-soft">
-          Ask someone on the trip to restore you, or open another trip.
-        </p>
+    <>
+      <Gate
+        title="You were removed from this trip"
+        lead="Ask someone on the trip to restore you, or open another trip."
+      >
         <button className="btn-primary" onClick={() => setSheet('trips')}>
           Your trips
         </button>
         <button className="btn-outline justify-center" onClick={() => clearMe(trip.id)}>
           I'm someone else
         </button>
-      </div>
+      </Gate>
       {sheet === 'trips' && (
         <TripsSheet
           v={v}
@@ -149,6 +152,6 @@ export function RemovedGate({ trip }: { trip: Trip }) {
           <TripForm template={trip} onDone={close} onCancel={close} />
         </Sheet>
       )}
-    </main>
+    </>
   );
 }

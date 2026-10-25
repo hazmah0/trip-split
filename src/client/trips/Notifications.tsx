@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react';
 import { pushStatus, pushSupported, setPush } from '../lib/push.ts';
 import type { PushStatus } from '../lib/push.ts';
+import { SettingsCard } from './SettingsCard.tsx';
+
+function hint(status: PushStatus | 'offline', denied: boolean): string {
+  if (!pushSupported)
+    return 'Notifications work in the installed app. On iPhone, tap Share, then Add to Home Screen.';
+  if (status === 'offline') return 'Notifications can be changed once this phone is back online.';
+  if (status.on)
+    return 'This phone gets a notification when someone else adds an expense or a payment.';
+  if (denied) return "Notifications are blocked for this app. Allow them in the phone's settings.";
+  return 'Get a notification on this phone when someone else adds an expense or a payment.';
+}
 
 export function Notifications({ tripId, online }: { tripId: string; online: boolean }) {
   const [fetched, setFetched] = useState<PushStatus | null | 'offline'>();
@@ -29,19 +40,7 @@ export function Notifications({ tripId, online }: { tripId: string; online: bool
   }
 
   return (
-    <div className="mx-4 mt-4 flex flex-col gap-3 card px-4 pt-4.5 pb-5 wide:mx-0">
-      <h2 className="text-3xl font-extrabold">Notifications</h2>
-      <p className="hint">
-        {!pushSupported
-          ? 'Notifications work in the installed app. On iPhone, tap Share, then Add to Home Screen.'
-          : status === 'offline'
-            ? 'Notifications can be changed once this phone is back online.'
-            : status.on
-              ? 'This phone gets a notification when someone else adds an expense or a payment.'
-              : denied
-                ? "Notifications are blocked for this app. Allow them in the phone's settings."
-                : 'Get a notification on this phone when someone else adds an expense or a payment.'}
-      </p>
+    <SettingsCard title="Notifications" hint={hint(status, denied)} note={note}>
       {pushSupported && status !== 'offline' && (
         <div className="form-actions">
           <button
@@ -54,11 +53,6 @@ export function Notifications({ tripId, online }: { tripId: string; online: bool
           </button>
         </div>
       )}
-      {note && (
-        <p className="hint" role="status">
-          {note}
-        </p>
-      )}
-    </div>
+    </SettingsCard>
   );
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { dayLabel, listNames, money, today } from '../lib/format.ts';
 import { CATEGORY_LABEL, placeOf } from '../lib/labels.ts';
 import type { View } from '../lib/store.ts';
-import { receiver, summarize } from '../../shared/ledger.ts';
+import { picked, receiver, summarize } from '../../shared/ledger.ts';
 import { everyone, isEveryone, label } from '../../shared/travellers.ts';
 import type { Entry, Trip } from '../../shared/types.ts';
 import { Icon } from '../ui/Icon.tsx';
@@ -59,7 +59,12 @@ export function ExpenseList({
   const q = query.trim().toLowerCase();
   const shown = q ? v.entries.filter((e) => matches(e, trip, q)) : v.entries;
   const days = new Map<string, Entry[]>();
-  for (const e of shown) days.set(e.date, [...(days.get(e.date) ?? []), e]);
+  for (const e of shown) {
+    const day = days.get(e.date) ?? [];
+    day.push(e);
+    days.set(e.date, day);
+  }
+
   return (
     <div className="mt-2">
       <label className="mx-4 field wide:mx-0">
@@ -124,6 +129,7 @@ function Row({
   const payer = label(trip, e.paidBy);
   const local = e.currency !== home;
   const transfer = e.kind === 'transfer';
+
   return (
     <button className="list-row" onClick={onOpen}>
       <span
@@ -148,13 +154,7 @@ function Row({
         </span>
       </span>
       <span className="flex flex-col items-end gap-px whitespace-nowrap">
-        <b className="text-lg font-extrabold">
-          {local
-            ? e.rate
-              ? `${pending && !e.rateManual ? '≈ ' : ''}${money(e.home, home)}`
-              : '…'
-            : money(e.amount, e.currency)}
-        </b>
+        <b className="text-lg font-extrabold">{amountText(e, home, pending)}</b>
         <small className="text-xs font-semibold text-soft">
           {local ? money(e.amount, e.currency) : `paid in ${e.currency}`}
         </small>
@@ -163,8 +163,15 @@ function Row({
   );
 }
 
+function amountText(e: Entry, home: string, pending: boolean) {
+  if (e.currency === home) return money(e.amount, e.currency);
+  if (!e.rate) return '…';
+  const estimate = pending && !e.rateManual;
+  return `${estimate ? '≈ ' : ''}${money(e.home, home)}`;
+}
+
 function splitTitle(shares: number[], trip: Trip) {
-  const who = shares.flatMap((w, i) => (w ? [i] : []));
+  const who = picked(shares);
   if (who.length === 1) return `only ${label(trip, who[0]!)}`;
   if (who.some((i) => shares[i] !== shares[who[0]!])) {
     const total = who.reduce((a, i) => a + shares[i]!, 0);

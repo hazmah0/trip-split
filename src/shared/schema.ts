@@ -9,20 +9,20 @@ import {
 } from './types.ts';
 
 const currency = z.string().regex(CURRENCY_CODE);
-const person = z
+const name = z
   .string()
   .max(40)
   .refine((s) => s.trim().length > 0);
 const nonNegative = z.int().nonnegative();
 const cookieSafeId = z.string().regex(/^[\w-]{1,64}$/);
-const traveller = z
+const person = z
   .int()
   .min(0)
   .max(MAX_SLOTS - 1);
 const swishNumber = z.union([z.literal(''), z.string().regex(SWISH_NUMBER)]);
 
 export const TravellerSchema = z.object({
-  name: person,
+  name,
   removed: z.literal(true).optional(),
   swish: z.string().regex(SWISH_NUMBER).optional(),
 });
@@ -46,12 +46,12 @@ export const TripSchema = z
   })
   .refine((t) => new Set([t.home, ...t.locals]).size === t.locals.length + 1, { path: ['locals'] });
 
-export const TravellerAddSchema = z.object({ name: person });
+export const TravellerAddSchema = z.object({ name });
 
 export const TravellerPatchSchema = z
   .object({
-    person: traveller,
-    name: person.optional(),
+    person,
+    name: name.optional(),
     removed: z.boolean().optional(),
     swish: swishNumber.optional(),
   })
@@ -69,14 +69,14 @@ export const EntryInputSchema = z.object({
   currency,
   rate: z.number().positive().nullable(), // home units per 1 unit of `currency`
   rateManual: z.boolean(),
-  paidBy: traveller,
+  paidBy: person,
   shares: z
     .array(z.int().min(0).max(100))
     .min(1)
     .max(MAX_SLOTS)
     .refine((s) => s.some((w) => w > 0)),
-  addedBy: traveller.optional(),
-  editedBy: traveller.optional(),
+  addedBy: person.optional(),
+  editedBy: person.optional(),
   updatedAt: nonNegative,
   deleted: z.boolean(),
 });

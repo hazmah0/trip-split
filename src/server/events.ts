@@ -6,6 +6,7 @@ import type { Access, Env } from './access.ts';
 type Listener = { access: Access; send: (tripId: string) => Promise<void>; end: () => void };
 
 export type Notify = (tripId: string, endMemberStreams?: boolean) => void;
+export type Events = ReturnType<typeof createEvents>;
 
 export function createEvents() {
   const listeners = new Set<Listener>();

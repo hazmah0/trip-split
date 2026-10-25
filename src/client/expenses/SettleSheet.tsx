@@ -1,13 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import {
-  authorsLine,
-  currencySymbol,
-  groupAmount,
-  majorText,
-  money,
-  parseAmount,
-  today,
-} from '../lib/format.ts';
+import { authorsLine, groupAmount, majorText, money, parseAmount, today } from '../lib/format.ts';
 import { deleteEntry, recordTransfer } from '../lib/store.ts';
 import {
   clearSwish,
@@ -19,6 +11,7 @@ import {
 import { receiver, type Settlement } from '../../shared/ledger.ts';
 import { active, isRemoved, label } from '../../shared/travellers.ts';
 import type { Entry, Person, Trip } from '../../shared/types.ts';
+import { AmountField, DateField } from '../ui/fields.tsx';
 import { PersonPicker } from '../ui/people.tsx';
 import { Sheet } from '../ui/Sheet.tsx';
 
@@ -46,8 +39,14 @@ export function SettleSheet({
   const [date, setDate] = useState(entry?.date ?? today());
   const amount = parseAmount(amountText, home);
   const authors = entry && authorsLine(entry, trip);
-  const pickFrom = (p: Person) => (p === to && setTo(from), setFrom(p));
-  const pickTo = (p: Person) => (p === from && setFrom(to), setTo(p));
+  const pickFrom = (p: Person) => {
+    if (p === to) setTo(from);
+    setFrom(p);
+  };
+  const pickTo = (p: Person) => {
+    if (p === from) setFrom(to);
+    setTo(p);
+  };
   const swishable = !entry && home === SWISH_CURRENCY && from === me;
   const swishTo = trip.travellers[to]?.swish;
 
@@ -75,30 +74,16 @@ export function SettleSheet({
             label="Who got the money"
           />
         </fieldset>
-        <label className="amount-field">
-          <span className="sr-only">Amount in {home}</span>
-          <span className="text-4xl font-extrabold text-soft" aria-hidden="true">
-            {currencySymbol(home)}
-          </span>
-          <input
-            inputMode="decimal"
-            value={amountText}
-            onChange={(e) => setAmountText(groupAmount(e.target.value, home))}
-          />
-        </label>
+        <AmountField
+          currency={home}
+          value={amountText}
+          onChange={(e) => setAmountText(groupAmount(e.target.value, home))}
+        />
         <p className="hint">
           Record it once the money has actually moved (Swish, bank transfer, cash). It brings their
           balance back towards zero.
         </p>
-        <label className="field">
-          <span>Date</span>
-          <input
-            className="input"
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value || today())}
-          />
-        </label>
+        <DateField value={date} onChange={(e) => setDate(e.target.value || today())} />
         {swishable && !swishTo && !isRemoved(trip, to) && (
           <p className="hint">
             {label(trip, to)} hasn't added a Swish number yet. They can add it in the Trip tab.

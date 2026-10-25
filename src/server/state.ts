@@ -20,7 +20,12 @@ function visibleState(db: Db, a: Access): State {
 
 async function allRates(db: Db, trips: Trip[]): Promise<Rates> {
   const locals = new Map<string, Set<string>>();
-  for (const t of trips) locals.set(t.home, new Set([...(locals.get(t.home) ?? []), ...t.locals]));
+  for (const t of trips) {
+    const ls = locals.get(t.home) ?? new Set();
+    for (const c of t.locals) ls.add(c);
+    locals.set(t.home, ls);
+  }
+
   return Object.fromEntries(
     await Promise.all(
       [...locals].map(async ([home, ls]) => [home, await latestRates(db, [...ls], home)]),

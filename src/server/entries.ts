@@ -8,7 +8,7 @@ import { need } from './access.ts';
 import type { Access, Env } from './access.ts';
 import type { Db } from './db.ts';
 import type { Notify } from './events.ts';
-import { parse, readJson } from './http.ts';
+import { parseWithId, readJson } from './http.ts';
 import type { Push } from './push.ts';
 import { rateFor } from './rates.ts';
 
@@ -19,13 +19,22 @@ function authorizeEntryWrite(a: Access, input: EntryInput, stored: Entry | null)
     throw new HTTPException(409, { message: 'an entry cannot move between trips' });
 }
 
+async function rateOf(db: Db, input: EntryInput, stored: Entry | null, home: string) {
+  if (input.currency === home) return 1;
+  if (input.rate !== null) return input.rate;
+  if (input.deleted) return stored?.rate ?? 1;
+  return rateFor(db, input.date, input.currency, home).catch((err: Error) => {
+    throw new HTTPException(502, { message: `rate unavailable: ${err.message}` });
+  });
+}
+
 async function putEntry(
   db: Db,
   a: Access,
   id: string,
   body: unknown,
 ): Promise<{ saved: Entry; changed: boolean; created: boolean }> {
-  const input = parse('entry', EntryInputSchema, body, id);
+  const input = parseWithId('entry', EntryInputSchema, body, id);
   const stored = db.getEntry(id);
   authorizeEntryWrite(a, input, stored);
 
@@ -34,26 +43,16 @@ async function putEntry(
     throw new HTTPException(TRIP_GONE, { message: 'trip not found or deleted' });
   if (input.currency !== trip.home && !trip.locals.includes(input.currency))
     throw new HTTPException(400, { message: 'invalid entry.currency' });
-  if (input.paidBy >= trip.travellers.length)
-    throw new HTTPException(400, { message: 'invalid entry.paidBy' });
-  if (input.addedBy !== undefined && input.addedBy >= trip.travellers.length)
-    throw new HTTPException(400, { message: 'invalid entry.addedBy' });
-  if (input.editedBy !== undefined && input.editedBy >= trip.travellers.length)
-    throw new HTTPException(400, { message: 'invalid entry.editedBy' });
+  for (const field of ['paidBy', 'addedBy', 'editedBy'] as const)
+    if ((input[field] ?? 0) >= trip.travellers.length)
+      throw new HTTPException(400, { message: `invalid entry.${field}` });
   if (input.shares.length > trip.travellers.length)
     throw new HTTPException(400, { message: 'invalid entry.shares' });
+
   if (stored && stored.updatedAt >= input.updatedAt)
     return { saved: stored, changed: false, created: false };
 
-  const rate =
-    input.currency === trip.home
-      ? 1
-      : (input.rate ??
-        (input.deleted
-          ? (stored?.rate ?? 1)
-          : await rateFor(db, input.date, input.currency, trip.home).catch((err: Error) => {
-              throw new HTTPException(502, { message: `rate unavailable: ${err.message}` });
-            })));
+  const rate = await rateOf(db, input, stored, trip.home);
   const { changed, created } = db.putEntry({
     ...input,
     addedBy: stored ? stored.addedBy : input.addedBy,

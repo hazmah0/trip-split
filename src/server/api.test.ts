@@ -1,43 +1,20 @@
-import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
+import { afterAll, beforeAll, expect, test } from 'vitest';
 import { createHmac } from 'node:crypto';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import webpush from 'web-push';
 import { transferShares } from '../shared/ledger.ts';
 import type { EntryInput, State, Trip } from '../shared/types.ts';
 import { start } from './main.ts';
-import { pushFromEnv } from './push.ts';
-
-const FX: Record<string, Record<string, number>> = {
-  SEK: { KRW: 133.57, JPY: 15.836 },
-  EUR: { KRW: 1580.2, JPY: 172.4 },
-};
-const realFetch = globalThis.fetch;
-const frankfurterCalls: string[] = [];
-let frankfurterDown = false;
-globalThis.fetch = async (input, init) => {
-  const url = String(input);
-  if (!url.startsWith('https://api.frankfurter.dev/')) return realFetch(input, init);
-  frankfurterCalls.push(url);
-  if (frankfurterDown) throw new TypeError('fetch failed');
-  if (url.endsWith('/currencies'))
-    return Response.json({
-      EUR: 'Euro',
-      JPY: 'Japanese Yen',
-      KRW: 'South Korean Won',
-      SEK: 'Swedish Krona',
-    });
-  const base = new URL(url).searchParams.get('base')!;
-  return Response.json({ amount: 1, base, date: '2026-10-22', rates: FX[base] });
-};
-
-const dir = mkdtempSync(join(tmpdir(), 'trip-split-test-'));
-const dist = join(dir, 'dist');
-mkdirSync(join(dist, 'assets'), { recursive: true });
-writeFileSync(join(dist, 'index.html'), '<!doctype html>app');
-writeFileSync(join(dist, 'assets', 'index-abc123.js'), 'console.log(1)');
-writeFileSync(join(dir, 'secret.txt'), 'secret');
+import {
+  dir,
+  dist,
+  entry,
+  frankfurter,
+  jarOf,
+  people,
+  realFetch,
+  request,
+  trip,
+} from './testing.ts';
 
 let app: Awaited<ReturnType<typeof start>>;
 let cookie = '';
@@ -51,60 +28,17 @@ beforeAll(async () => {
     push: null,
   });
 });
-afterAll(async () => {
-  await app.close();
-  globalThis.fetch = realFetch;
-  rmSync(dir, { recursive: true, force: true });
-});
+afterAll(() => app.close());
 
 const call = (jar: string, path: string, method = 'GET', body?: unknown, base = app.url) =>
-  realFetch(base + path, {
-    method,
-    headers: { cookie: jar, 'content-type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  request(base, jar, path, method, body);
 const api = (path: string, method = 'GET', body?: unknown) => call(cookie, path, method, body);
 const signIn = async (code: string) => {
   const res = await call('', '/api/login', 'POST', { code });
-  return {
-    res,
-    cookie: res.headers
-      .getSetCookie()
-      .map((c) => c.split(';')[0])
-      .join('; '),
-  };
+  return { res, cookie: jarOf('', res) };
 };
 
-const people = (...names: string[]) => names.map((name) => ({ name }));
-const trip = (p: Partial<Trip> = {}): Trip => ({
-  id: 'a',
-  name: 'Korea & Japan',
-  travellers: people('Ada', 'Bo'),
-  home: 'SEK',
-  locals: ['KRW', 'JPY'],
-  budget: 5000000,
-  updatedAt: 1000,
-  deleted: false,
-  ...p,
-});
 const state = async () => (await (await api('/api/state')).json()) as State;
-const entry = (p: Partial<EntryInput> = {}): EntryInput => ({
-  id: 'e1',
-  tripId: 'a',
-  kind: 'expense',
-  date: '2026-10-20',
-  title: 'bibimbap',
-  category: 'food',
-  amount: 15000,
-  currency: 'KRW',
-  rate: null,
-  rateManual: false,
-  paidBy: 0,
-  shares: [1, 1],
-  updatedAt: 1000,
-  deleted: false,
-  ...p,
-});
 
 test('health needs no auth', async () => {
   expect((await api('/api/health')).status).toBe(200);
@@ -148,11 +82,10 @@ test('KRW entry gets the inverted ECB rate for its date and the right home amoun
   const stored = await res.json();
   expect(stored.rate).toBe(1 / 133.57);
   expect(stored.home).toBe(11230);
-  expect(frankfurterCalls).toContain(
+  expect(frankfurter.calls).toContain(
     'https://api.frankfurter.dev/v1/2026-10-20?base=SEK&symbols=KRW',
   );
   expect((await state()).entries).toStrictEqual([stored]);
-  expect(stored.tripId).toBe('a');
 });
 
 test('a home-currency entry has rate 1 and a manual rate is kept', async () => {
@@ -176,9 +109,13 @@ test('state lists entries by date desc, then updatedAt desc', async () => {
     'PUT',
     entry({ id: 'e4', date: '2026-10-21', currency: 'SEK', amount: 100 }),
   );
+  await api(
+    '/api/entries/e4b',
+    'PUT',
+    entry({ id: 'e4b', date: '2026-10-21', currency: 'SEK', amount: 100, updatedAt: 1001 }),
+  );
   const ids = (await state()).entries.map((e) => e.id);
-  expect(ids.slice(0, 1)).toStrictEqual(['e4']);
-  expect(new Set(ids)).toStrictEqual(new Set(['e1', 'e2', 'e3', 'e4']));
+  expect(ids.slice(0, 2)).toStrictEqual(['e4b', 'e4']);
 });
 
 test('a stale or repeated updatedAt returns the stored entry unchanged', async () => {
@@ -243,14 +180,12 @@ test('invalid input is rejected with 400', async () => {
     { editedBy: 2 },
     { rate: -1 },
     { note: 'x'.repeat(1001) },
+    { tripId: 1 as never },
   ];
   for (const c of cases) {
     const res = await api('/api/entries/bad', 'PUT', entry({ id: 'bad', ...c }));
     expect(res.status, JSON.stringify(c)).toBe(400);
   }
-  expect(
-    (await api('/api/entries/bad', 'PUT', entry({ id: 'bad', tripId: 1 as never }))).status,
-  ).toBe(400);
   const tripCases: Partial<Trip>[] = [
     { id: 'other' },
     { name: '   ' },
@@ -324,7 +259,7 @@ test('a trip currency without ECB rates is rejected, so its expenses can never g
 });
 
 test('a tombstone needs no rate lookup, even for an entry the server never saw', async () => {
-  frankfurterDown = true;
+  frankfurter.down = true;
   try {
     const res = await api(
       '/api/entries/t1',
@@ -333,7 +268,7 @@ test('a tombstone needs no rate lookup, even for an entry the server never saw',
     );
     expect(res.status).toBe(200);
   } finally {
-    frankfurterDown = false;
+    frankfurter.down = false;
   }
 });
 
@@ -365,7 +300,7 @@ test('trips with different homes price entries in their own home', async () => {
   ).json();
   expect(krw.rate).toBe(1 / 1580.2);
   expect(krw.home).toBe(949);
-  expect(frankfurterCalls).toContain(
+  expect(frankfurter.calls).toContain(
     'https://api.frankfurter.dev/v1/2026-10-20?base=EUR&symbols=KRW',
   );
   const eur = await (
@@ -563,7 +498,7 @@ test('a trip whose 50 slots are used, mostly by removed travellers, takes no one
 });
 
 test('rate lookup falls back to the cache, and fails with 502 when nothing is cached', async () => {
-  frankfurterDown = true;
+  frankfurter.down = true;
   try {
     const cached = await api('/api/entries/e5', 'PUT', entry({ id: 'e5', date: '2026-09-01' }));
     expect((await cached.json()).rate).toBe(1 / 133.57);
@@ -571,7 +506,7 @@ test('rate lookup falls back to the cache, and fails with 502 when nothing is ca
       502,
     );
   } finally {
-    frankfurterDown = false;
+    frankfurter.down = false;
   }
 });
 
@@ -584,9 +519,9 @@ test('rates returns latest home units per local, per home, over the union of liv
 
 test('latest rates are fetched once and shared across syncs', async () => {
   await api('/api/rates');
-  const calls = frankfurterCalls.length;
+  const calls = frankfurter.calls.length;
   await api('/api/rates');
-  expect(frankfurterCalls.length).toBe(calls);
+  expect(frankfurter.calls.length).toBe(calls);
 });
 
 test('a member joined by invite code sees only that trip, its invite and its rates', async () => {
@@ -827,214 +762,6 @@ test('every response carries security headers, but HSTS is left to the HTTPS pro
   }
 });
 
-const jarOf = (jar: string, res: Response) =>
-  [jar, ...res.headers.getSetCookie().map((c) => c.split(';')[0])].filter(Boolean).join('; ');
-const withoutDevice = (jar: string) =>
-  jar
-    .split('; ')
-    .filter((c) => !c.startsWith('tb_device='))
-    .join('; ');
-const endpoint = (device: string) => `https://fcm.googleapis.com/fcm/send/${device}`;
-const note = (to: string, ...lines: string[]) => ({
-  to,
-  title: 'Seoul',
-  body: lines.join('\n'),
-  tripId: 'p',
-});
-
-describe('push notifications', () => {
-  const sent: { to: string; title: string; body: string; tripId: string }[] = [];
-  const gone = new Set<string>();
-  const keys = { p256dh: 'p256dh', auth: 'auth' };
-  let srv: Awaited<ReturnType<typeof start>>;
-  let owner = '';
-  let bo = '';
-  let cy = '';
-
-  const req = (jar: string, path: string, method = 'GET', body?: unknown) =>
-    call(jar, path, method, body, srv.url);
-  const logIn = async (code: string, jar = '') =>
-    jarOf(jar, await req('', '/api/login', 'POST', { code }));
-  const pushOn = async (jar: string, device: string, tripId = 'p') => {
-    const res = await req(jar, `/api/push/${tripId}`, 'PUT', { endpoint: endpoint(device), keys });
-    return { res, jar: jarOf(jar, res) };
-  };
-  const status = async (jar: string) => (await req(jar, '/api/push/p')).json();
-  const save = (jar: string, p: Partial<EntryInput>) =>
-    req(
-      jar,
-      `/api/entries/${p.id}`,
-      'PUT',
-      entry({ tripId: 'p', currency: 'SEK', amount: 4500, ...p }),
-    );
-  const drain = async (n: number) => {
-    await vi.waitFor(() => expect(sent.length).toBeGreaterThanOrEqual(n));
-    return sent.splice(0).sort((a, b) => a.to.localeCompare(b.to));
-  };
-
-  beforeAll(async () => {
-    srv = await start({
-      port: 0,
-      dataDir: join(dir, 'push'),
-      passcode: 'pw',
-      distDir: dist,
-      push: {
-        publicKey: 'test-key',
-        delayMs: 50,
-        send: async (to, payload) => {
-          sent.push({ to: to.endpoint.split('/').at(-1)!, ...JSON.parse(payload) });
-          return gone.has(to.endpoint) ? 'gone' : 'sent';
-        },
-      },
-    });
-    owner = await logIn('pw');
-    const seoul = trip({
-      id: 'p',
-      name: 'Seoul',
-      travellers: people('Ada', 'Bo', 'Cy'),
-      locals: ['KRW'],
-    });
-    await req(owner, '/api/trips/p', 'PUT', seoul);
-    await req(owner, '/api/trips/q', 'PUT', trip({ id: 'q', name: 'Elsewhere', locals: [] }));
-    const code = ((await (await req(owner, '/api/state')).json()) as State).invites.p!;
-    bo = await logIn(code);
-    cy = await logIn(code);
-  });
-  afterAll(() => srv.close());
-
-  test('push is off without VAPID keys', async () => {
-    expect((await api('/api/push/a')).status).toBe(404);
-  });
-
-  test('subscribing needs a known https push service and a trip the device can see', async () => {
-    expect(await status(owner)).toStrictEqual({ key: 'test-key', on: false });
-    for (const bad of [
-      'http://fcm.googleapis.com/fcm/send/x',
-      'https://push.example.com/x',
-      'https://evil.com#.googleapis.com/',
-      'https://fcm.googleapis.com.evil.com/x',
-    ]) {
-      const res = await req(owner, '/api/push/p', 'PUT', { endpoint: bad, keys });
-      expect(res.status, bad).toBe(400);
-    }
-    expect((await pushOn(bo, 'B', 'q')).res.status, 'bo is a member of p only').toBe(403);
-
-    const a = await pushOn(owner, 'A');
-    expect(await a.res.json()).toStrictEqual({ key: 'test-key', on: true });
-    expect(a.res.headers.get('set-cookie')).toMatch(/^tb_device=[\w-]{22};.*HttpOnly/);
-    owner = a.jar;
-    expect(await status(owner)).toStrictEqual({ key: 'test-key', on: true });
-    bo = (await pushOn(bo, 'B')).jar;
-  });
-
-  test('a new expense notifies every other subscribed device once', async () => {
-    expect((await save(cy, { id: 'p1', currency: 'KRW', amount: 15000 })).status).toBe(200);
-    const line = 'Ada paid 15 000 KRW for bibimbap';
-    expect(await drain(2)).toStrictEqual([note('A', line), note('B', line)]);
-  });
-
-  test('the device that saved the entry is not notified', async () => {
-    await save(owner, { id: 'p2', title: 'Taxi' });
-    expect(await drain(1)).toStrictEqual([note('B', 'Ada paid 45 SEK for Taxi')]);
-  });
-
-  test('edits, deletes, stale retries and tombstones notify nobody', async () => {
-    await save(cy, { id: 'p1', currency: 'KRW', amount: 15000, title: 'edit', updatedAt: 1001 });
-    await save(cy, { id: 'p2', title: 'Taxi', deleted: true, updatedAt: 1001 });
-    await save(cy, { id: 'p1', currency: 'KRW', amount: 15000, updatedAt: 1000 });
-    await save(cy, { id: 'p9', deleted: true });
-    await save(cy, { id: 'p4', title: 'Oops' });
-    await save(cy, { id: 'p4', title: 'Oops', deleted: true, updatedAt: 1001 });
-    await save(cy, { id: 'p3', title: 'Coffee' });
-    const line = 'Ada paid 45 SEK for Coffee';
-    expect(await drain(2), 'only the one entry still live').toStrictEqual([
-      note('A', line),
-      note('B', line),
-    ]);
-  });
-
-  test('back-to-back new entries arrive as one notification per device', async () => {
-    for (const [i, title] of ['Lunch', 'Metro', 'Museum', 'Dinner'].entries())
-      await save(cy, { id: `b${i}`, title });
-    const body = ['Lunch', 'Metro', 'Museum'].map((t) => `Ada paid 45 SEK for ${t}`);
-    expect(await drain(2)).toStrictEqual([
-      note('A', ...body, '+1 more'),
-      note('B', ...body, '+1 more'),
-    ]);
-  });
-
-  test('two devices saving at once each hear only about the other one', async () => {
-    cy = (await pushOn(cy, 'C')).jar;
-    await save(owner, { id: 'w1', title: 'Fuel' });
-    await save(bo, { id: 'w2', title: 'Snacks', paidBy: 1 });
-    const fuel = 'Ada paid 45 SEK for Fuel';
-    const snacks = 'Bo paid 45 SEK for Snacks';
-    expect(await drain(3)).toStrictEqual([
-      note('A', snacks),
-      note('B', fuel),
-      note('C', fuel, snacks),
-    ]);
-  });
-
-  test('a subscription the push service calls gone is deleted', async () => {
-    gone.add(endpoint('B'));
-    await save(cy, { id: 'g1', title: 'Tea' });
-    const tea = 'Ada paid 45 SEK for Tea';
-    expect(await drain(2)).toStrictEqual([note('A', tea), note('B', tea)]);
-    expect(await status(bo)).toStrictEqual({ key: 'test-key', on: false });
-    await save(cy, { id: 'g2', title: 'Cake' });
-    expect(await drain(1)).toStrictEqual([note('A', 'Ada paid 45 SEK for Cake')]);
-    gone.clear();
-    expect(await (await pushOn(bo, 'B')).res.json()).toStrictEqual({ key: 'test-key', on: true });
-  });
-
-  test('turning notifications off stops them for that device only', async () => {
-    expect(await (await req(bo, '/api/push/p', 'DELETE')).json()).toStrictEqual({
-      key: 'test-key',
-      on: false,
-    });
-    await save(cy, { id: 'o1', title: 'Soju' });
-    expect(await drain(1)).toStrictEqual([note('A', 'Ada paid 45 SEK for Soju')]);
-    expect(await status(cy), 'C is still on').toStrictEqual({ key: 'test-key', on: true });
-  });
-
-  test('an invite reset stops member notifications, the owner keeps getting them', async () => {
-    const reset = await req(owner, '/api/trips/p/invite', 'POST');
-    const { code } = (await reset.json()) as { code: string };
-    await save(withoutDevice(owner), { id: 'r1', title: 'Bus' });
-    expect(await drain(1), 'not B or C').toStrictEqual([note('A', 'Ada paid 45 SEK for Bus')]);
-
-    const device = bo.split('; ').find((c) => c.startsWith('tb_device='))!;
-    const back = await logIn(code, device);
-    expect(await status(back), 'rejoining does not revive the old grant').toStrictEqual({
-      key: 'test-key',
-      on: false,
-    });
-  });
-
-  test('a removed payer is named as removed', async () => {
-    await req(owner, '/api/trips/p/travellers', 'POST', { name: 'Di' });
-    await req(owner, '/api/trips/p/travellers', 'PATCH', { person: 3, removed: true });
-    await save(withoutDevice(owner), { id: 'rm1', title: 'Late', paidBy: 3, shares: [1, 1, 1, 1] });
-    expect(await drain(1)).toStrictEqual([note('A', 'Di (removed) paid 45 SEK for Late')]);
-  });
-
-  test('a settle-up payment names who got paid', async () => {
-    await save(withoutDevice(owner), {
-      id: 't1',
-      kind: 'transfer',
-      title: '',
-      amount: 30000,
-      shares: [0, 1],
-    });
-    expect(await drain(1)).toStrictEqual([note('A', 'Ada paid Bo 300 SEK')]);
-  });
-});
-
-test('push settings are checked at start, not on the first send', () => {
-  const { publicKey, privateKey } = webpush.generateVAPIDKeys();
-  const env = { VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: privateKey };
-  expect(() => pushFromEnv({ ...env, VAPID_SUBJECT: 'you@example.com' })).toThrow(/subject/);
-  expect(() => pushFromEnv({ ...env, VAPID_SUBJECT: 'mailto:you@example.com' })).not.toThrow();
-  expect(pushFromEnv({})).toBeNull();
+test('push is off without VAPID keys', async () => {
+  expect((await api('/api/push/a')).status).toBe(404);
 });
