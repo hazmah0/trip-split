@@ -3,6 +3,7 @@ import { tripCsv } from '../lib/csv.ts';
 import { dayLabel, money } from '../lib/format.ts';
 import { CATEGORY_LABEL, placeOf } from '../lib/labels.ts';
 import { allocate, decimals, summarize } from '../../shared/ledger.ts';
+import { isRemoved, label } from '../../shared/travellers.ts';
 import type { Entry, Trip } from '../../shared/types.ts';
 import { Icon } from '../ui/Icon.tsx';
 import { Dot } from '../ui/people.tsx';
@@ -44,8 +45,8 @@ function Bars({
 }
 
 export function Stats({ entries, trip }: { entries: Entry[]; trip: Trip }) {
-  const { home, names } = trip;
-  const s = summarize(entries, names.length);
+  const { home } = trip;
+  const s = summarize(entries, trip.travellers.length);
   if (s.spent === 0) {
     return (
       <div className="m-4 p-5 text-base font-semibold text-soft wide:mx-0">
@@ -61,6 +62,9 @@ export function Stats({ entries, trip }: { entries: Entry[]; trip: Trip }) {
   const total = units * unit;
   const paid = allocate(units, s.paid).map((x) => x * unit);
   const share = allocate(units, s.consumed).map((x) => x * unit);
+  const rows = trip.travellers.flatMap((_, i) =>
+    !isRemoved(trip, i) || s.paid[i] || s.consumed[i] ? [i] : [],
+  );
 
   const days = [...s.byDay.keys()].sort();
   const first = days[0]!;
@@ -112,12 +116,12 @@ export function Stats({ entries, trip }: { entries: Entry[]; trip: Trip }) {
             </tr>
           </thead>
           <tbody className="[&>tr+tr>*]:border-t [&>tr+tr>*]:border-hairline">
-            {names.map((n, i) => (
+            {rows.map((i) => (
               <tr key={i}>
                 <th scope="row" className="w-full max-w-0 py-2.25 text-left font-extrabold">
                   <span className="flex items-center gap-1">
                     <Dot p={i} />
-                    <span className="truncate">{n}</span>
+                    <span className="truncate">{label(trip, i)}</span>
                   </span>
                 </th>
                 <td className={cell}>{money(paid[i]!, home)}</td>

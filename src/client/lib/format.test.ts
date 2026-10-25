@@ -42,6 +42,10 @@ test.each([
   [{ addedBy: 1, editedBy: 1 }, 'Added and edited by Bo'],
   [{ editedBy: 1 }, 'Edited by Bo'],
   [{}, null],
+  [{ addedBy: 2 }, 'Added by Cy (removed)'],
 ])('names who added and edited %o', (entry, line) => {
-  expect(authorsLine(entry, ['Ada', 'Bo'])).toBe(line);
+  const trip = {
+    travellers: [{ name: 'Ada' }, { name: 'Bo' }, { name: 'Cy', removed: true as const }],
+  };
+  expect(authorsLine(entry, trip)).toBe(line);
 });

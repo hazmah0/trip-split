@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from 'react';
-import { login, setMe, useStore } from '../lib/store.ts';
+import { clearMe, login, selectTrip, setMe, useStore } from '../lib/store.ts';
+import { active, label } from '../../shared/travellers.ts';
 import type { Trip } from '../../shared/types.ts';
 import { TripForm } from '../trips/TripForm.tsx';
+import { TripsSheet } from '../trips/TripsSheet.tsx';
 import { Avatar, personStyle } from '../ui/people.tsx';
+import { Sheet } from '../ui/Sheet.tsx';
 
 export function Splash({ online }: { online: boolean }) {
   return (
@@ -95,19 +98,57 @@ export function WhoAmI({ trip }: { trip: Trip }) {
           On {trip.name}, new expenses on this phone default to being paid by you.
         </p>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3">
-          {trip.names.map((n, i) => (
+          {active(trip).map((i) => (
             <button
               key={i}
               className="flex flex-col items-center gap-2 rounded-card bg-ground px-2 py-4.5 text-lg font-extrabold transition-[transform,background-color] duration-200 ease-spring hover:bg-sand active:scale-96"
               style={personStyle(i)}
               onClick={() => setMe(trip.id, i)}
             >
-              <Avatar p={i} name={n} big />
-              {n}
+              <Avatar p={i} name={label(trip, i)} big />
+              {label(trip, i)}
             </button>
           ))}
         </div>
       </div>
+    </main>
+  );
+}
+
+export function RemovedGate({ trip }: { trip: Trip }) {
+  const v = useStore();
+  const [sheet, setSheet] = useState<'trips' | 'new-trip' | null>(null);
+  const close = () => setSheet(null);
+  return (
+    <main className="grid min-h-dvh place-items-center px-4 py-6">
+      <div className="flex w-full max-w-115 flex-col gap-4 card px-5 py-6">
+        <h1 className="text-4xl font-extrabold">You were removed from this trip</h1>
+        <p className="-mt-2 font-semibold text-soft">
+          Ask someone on the trip to restore you, or open another trip.
+        </p>
+        <button className="btn-primary" onClick={() => setSheet('trips')}>
+          Your trips
+        </button>
+        <button className="btn-outline justify-center" onClick={() => clearMe(trip.id)}>
+          I'm someone else
+        </button>
+      </div>
+      {sheet === 'trips' && (
+        <TripsSheet
+          v={v}
+          onPick={(id) => {
+            selectTrip(id);
+            close();
+          }}
+          onNew={() => setSheet('new-trip')}
+          onClose={close}
+        />
+      )}
+      {sheet === 'new-trip' && (
+        <Sheet title="New trip" onClose={close}>
+          <TripForm template={trip} onDone={close} onCancel={close} />
+        </Sheet>
+      )}
     </main>
   );
 }

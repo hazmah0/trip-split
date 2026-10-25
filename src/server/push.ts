@@ -5,6 +5,7 @@ import { HTTPException } from 'hono/http-exception';
 import webpush from 'web-push';
 import { receiver, toMajor } from '../shared/ledger.ts';
 import { PushSubscriptionSchema } from '../shared/schema.ts';
+import { label } from '../shared/travellers.ts';
 import type { Entry, PushTarget, Trip } from '../shared/types.ts';
 import { cookieAttrs, inviteCodeOf, need } from './access.ts';
 import type { Env } from './access.ts';
@@ -58,8 +59,8 @@ const amount = (e: Entry) =>
 
 const line = (trip: Trip, e: Entry) =>
   e.kind === 'transfer'
-    ? `${trip.names[e.paidBy]} paid ${trip.names[receiver(e)]} ${amount(e)}`
-    : `${trip.names[e.paidBy]} paid ${amount(e)} for ${e.title || e.category}`;
+    ? `${label(trip, e.paidBy)} paid ${label(trip, receiver(e))} ${amount(e)}`
+    : `${label(trip, e.paidBy)} paid ${amount(e)} for ${e.title || e.category}`;
 
 function message(trip: Trip, entries: Entry[]) {
   const lines = entries.slice(0, MAX_LINES).map((e) => line(trip, e));

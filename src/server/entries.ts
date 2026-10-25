@@ -34,13 +34,13 @@ async function putEntry(
     throw new HTTPException(TRIP_GONE, { message: 'trip not found or deleted' });
   if (input.currency !== trip.home && !trip.locals.includes(input.currency))
     throw new HTTPException(400, { message: 'invalid entry.currency' });
-  if (input.paidBy >= trip.names.length)
+  if (input.paidBy >= trip.travellers.length)
     throw new HTTPException(400, { message: 'invalid entry.paidBy' });
-  if (input.addedBy !== undefined && input.addedBy >= trip.names.length)
+  if (input.addedBy !== undefined && input.addedBy >= trip.travellers.length)
     throw new HTTPException(400, { message: 'invalid entry.addedBy' });
-  if (input.editedBy !== undefined && input.editedBy >= trip.names.length)
+  if (input.editedBy !== undefined && input.editedBy >= trip.travellers.length)
     throw new HTTPException(400, { message: 'invalid entry.editedBy' });
-  if (input.shares.length > trip.names.length)
+  if (input.shares.length > trip.travellers.length)
     throw new HTTPException(400, { message: 'invalid entry.shares' });
   if (stored && stored.updatedAt >= input.updatedAt)
     return { saved: stored, changed: false, created: false };

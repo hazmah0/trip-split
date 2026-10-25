@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS push (
 | | `updated_at` | Copy of `updatedAt`, for the last-write-wins check |
 | | `json` | The whole `Trip` |
 | `entries` | `id` | The client-generated entry id |
-| | `trip_id` | Copy of `tripId`, for the join to `trips`, the `hasEntries` check and the `entries_trip_id` index |
+| | `trip_id` | Copy of `tripId`, for the join to `trips`, the `hasEntries` and `tripEntries` lookups and the `entries_trip_id` index |
 | | `date` | Copy of `date`, for sorting newest first |
 | | `updated_at` | Copy of `updatedAt`, for the last-write-wins check and the second sort key |
 | | `json` | The whole `Entry`, including the `rate` and `home` that the server calculated |
@@ -75,16 +75,23 @@ A member's push row is valid only while its `code` is the trip's current code. `
 
 After the `CREATE` statements, `openDb` finds every trip without an `invites` row, tombstones included, and gives each one a new code. That is how a `travel.db` from before invites gets a code for every trip on its first start. `db.putTrip` also runs `addInvite` after each trip upsert, and `INSERT OR IGNORE` keeps the code that a trip already has. Rows are never deleted. Resetting a link replaces the code in place.
 
+### Traveller backfill on start
+
+Trips used to keep travellers as a `names` array of strings. After the invite backfill, `openDb` finds every trip whose `json` has no `travellers`, tombstones included, and rewrites it with `travellers = names.map(name => ({ name }))`. The `names` key is dropped, and `updated_at` stays the same, so the rewrite never wins or loses a last-write-wins check. A second start finds nothing to convert. Back up `travel.db` before the first start with this code.
+
 ## Queries
 
 `openDb` prepares each statement once and returns an object of functions, the `Db` type. Nothing outside `db.ts` writes SQL.
 
 | Statement | What it does | Called from |
 |---|---|---|
-| `getTrip` | One trip by id, tombstones included | `putTrip` in `trips.ts`, `putEntry` in `entries.ts`, and `POST /api/trips/:id/invite` |
+| `getTrip` | One trip by id, tombstones included | `putTrip` in `trips.ts`, `db.putTrip` to keep the stored travellers, `putEntry` in `entries.ts`, the traveller routes, and `POST /api/trips/:id/invite` |
 | `listTrips` | Live trips, ordered by `rowid`. An upsert keeps the `rowid`, so this is creation order. | `visibleTrips`, for `GET /api/state` and `GET /api/rates` |
-| `putTrip` | Last-write-wins upsert: `ON CONFLICT (id) DO UPDATE … WHERE excluded.updated_at > trips.updated_at` | `db.putTrip`, from `PUT /api/trips/:id` |
-| `hasEntries` | Whether the trip has a live entry | The two 409 checks in `putTrip` |
+| `putTrip` | Last-write-wins upsert: `ON CONFLICT (id) DO UPDATE … WHERE excluded.updated_at > trips.updated_at`. For an existing trip, `db.putTrip` first replaces the body's `travellers` with the stored ones. | `db.putTrip`, from `PUT /api/trips/:id` |
+| `setTravellers` | Replaces `travellers` inside a trip's `json` with `json_set`, leaving `updated_at` alone | `db.setTravellers`, from `POST` and `PATCH /api/trips/:id/travellers` |
+| `tripsWithoutTravellers`, `setTripJson` | Trips, tombstones included, whose `json` has no `travellers`, and a rewrite of one trip's `json` | The startup traveller backfill in `openDb` |
+| `hasEntries` | Whether the trip has a live entry | The home-currency 409 check in `putTrip` |
+| `tripEntries` | One trip's live entries | `db.tripEntries`, for the balance check in `PATCH /api/trips/:id/travellers` |
 | `getEntry` | One entry by id, tombstones included | `putEntry`, for the access and stale-write checks and for the response. `db.putEntry`, just before its upsert, to tell a new entry from an update. Push bursts, to re-read their entries. |
 | `listEntries` | Live entries of live trips, newest `date` first, then newest `updated_at` | `visibleState`, for `GET /api/state` |
 | `putEntry` | Last-write-wins upsert, the same shape as `putTrip` | `putEntry`, from `PUT /api/entries/:id` |

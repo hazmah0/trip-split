@@ -1,5 +1,6 @@
 import { decimals, toMajor, toMinor } from '../../shared/ledger.ts';
-import type { Entry } from '../../shared/types.ts';
+import { label } from '../../shared/travellers.ts';
+import type { Entry, Trip } from '../../shared/types.ts';
 
 const symbols = new Map<string, string>();
 export function currencySymbol(currency: string): string {
@@ -37,13 +38,14 @@ export function listNames(list: string[]): string {
 
 export function authorsLine(
   { addedBy, editedBy }: Pick<Entry, 'addedBy' | 'editedBy'>,
-  names: string[],
+  trip: Pick<Trip, 'travellers'>,
 ): string | null {
-  if (addedBy === undefined) return editedBy === undefined ? null : `Edited by ${names[editedBy]}`;
-  if (editedBy === undefined) return `Added by ${names[addedBy]}`;
+  const name = (p: number) => label(trip, p);
+  if (addedBy === undefined) return editedBy === undefined ? null : `Edited by ${name(editedBy)}`;
+  if (editedBy === undefined) return `Added by ${name(addedBy)}`;
   return editedBy === addedBy
-    ? `Added and edited by ${names[addedBy]}`
-    : `Added by ${names[addedBy]} · edited by ${names[editedBy]}`;
+    ? `Added and edited by ${name(addedBy)}`
+    : `Added by ${name(addedBy)} · edited by ${name(editedBy)}`;
 }
 
 export function today(): string {

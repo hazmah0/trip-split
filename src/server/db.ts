@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import type { Entry, PushTarget, Trip } from '../shared/types.ts';
+import type { Entry, PushTarget, Traveller, Trip } from '../shared/types.ts';
 
 export type Db = ReturnType<typeof openDb>;
 
@@ -44,8 +44,18 @@ export function openDb(dataDir: string) {
       ON CONFLICT (id) DO UPDATE SET updated_at = excluded.updated_at, json = excluded.json
       WHERE excluded.updated_at > trips.updated_at
     `),
+    setTravellers: db.prepare(
+      "UPDATE trips SET json = json_set(json, '$.travellers', json(?)) WHERE id = ?",
+    ),
+    tripsWithoutTravellers: db.prepare(
+      "SELECT id, json FROM trips WHERE json ->> 'travellers' IS NULL",
+    ),
+    setTripJson: db.prepare('UPDATE trips SET json = ? WHERE id = ?'),
     hasEntries: db.prepare(
       "SELECT EXISTS (SELECT 1 FROM entries WHERE trip_id = ? AND json ->> 'deleted' = 0) AS yes",
+    ),
+    tripEntries: db.prepare(
+      "SELECT json FROM entries WHERE trip_id = ? AND json ->> 'deleted' = 0",
     ),
     getEntry: db.prepare('SELECT json FROM entries WHERE id = ?'),
     listEntries: db.prepare(`
@@ -96,15 +106,28 @@ export function openDb(dataDir: string) {
       q.addInvite.run(id, newCode());
   }
   backfillInvites();
+  function backfillTravellers() {
+    for (const row of q.tripsWithoutTravellers.all() as { id: string; json: string }[]) {
+      const { names, ...trip } = JSON.parse(row.json) as { names: string[] };
+      const travellers = names.map((name) => ({ name }));
+      q.setTripJson.run(JSON.stringify({ ...trip, travellers }), row.id);
+    }
+  }
+  backfillTravellers();
 
   return {
     getTrip: (id: string) => json<Trip>(q.getTrip.get(id)),
     listTrips: () => q.listTrips.all().map((r) => json<Trip>(r)!),
     putTrip: (t: Trip) => {
-      q.putTrip.run(t.id, t.updatedAt, JSON.stringify(t));
+      const stored = json<Trip>(q.getTrip.get(t.id));
+      const row = stored ? { ...t, travellers: stored.travellers } : t;
+      q.putTrip.run(t.id, t.updatedAt, JSON.stringify(row));
       q.addInvite.run(t.id, newCode());
     },
+    setTravellers: (tripId: string, travellers: Traveller[]) =>
+      void q.setTravellers.run(JSON.stringify(travellers), tripId),
     hasEntries: (tripId: string) => (q.hasEntries.get(tripId) as { yes: number }).yes === 1,
+    tripEntries: (tripId: string) => q.tripEntries.all(tripId).map((r) => json<Entry>(r)!),
     getEntry: (id: string) => json<Entry>(q.getEntry.get(id)),
     listEntries: () => q.listEntries.all().map((r) => json<Entry>(r)!),
     putEntry: (e: Entry) => {

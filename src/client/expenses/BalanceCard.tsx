@@ -1,5 +1,6 @@
 import { money } from '../lib/format.ts';
 import { balances, settlements, summarize, type Settlement } from '../../shared/ledger.ts';
+import { label } from '../../shared/travellers.ts';
 import type { Entry, Trip } from '../../shared/types.ts';
 import { Icon } from '../ui/Icon.tsx';
 import { Avatar } from '../ui/people.tsx';
@@ -13,16 +14,18 @@ export function BalanceCard({
   trip: Trip;
   onSettle: (s?: Settlement) => void;
 }) {
-  const { names, home, budget } = trip;
-  const { spent } = summarize(entries, names.length);
-  const owed = settlements(balances(entries, names.length));
+  const { home, budget } = trip;
+  const people = trip.travellers.length;
+  const name = (p: number) => label(trip, p);
+  const { spent } = summarize(entries, people);
+  const owed = settlements(balances(entries, people));
   const over = budget !== null && spent > budget;
   const pct = budget ? Math.min(100, (spent / budget) * 100) : 100;
   const pair = (s: Settlement) => (
     <span className="inline-flex items-center gap-2 text-soft" aria-hidden="true">
-      <Avatar p={s.from} name={names[s.from]!} />
+      <Avatar p={s.from} name={name(s.from)} />
       <Icon name="arrow" size={18} />
-      <Avatar p={s.to} name={names[s.to]!} />
+      <Avatar p={s.to} name={name(s.to)} />
     </span>
   );
   return (
@@ -32,7 +35,7 @@ export function BalanceCard({
           <h1 className="mb-3 text-display font-extrabold text-balance">
             {owed[0] ? (
               <>
-                {names[owed[0].from]} owes {names[owed[0].to]}{' '}
+                {name(owed[0].from)} owes {name(owed[0].to)}{' '}
                 <span className="whitespace-nowrap">{money(owed[0].amount, home)}</span>
               </>
             ) : (
@@ -61,14 +64,14 @@ export function BalanceCard({
                 {pair(s)}
                 <span className="flex min-w-0 flex-1 flex-col font-bold wide:flex-row wide:gap-1">
                   <span className="truncate">
-                    {names[s.from]} pays {names[s.to]}
+                    {name(s.from)} pays {name(s.to)}
                   </span>
                   <b className="whitespace-nowrap">{money(s.amount, home)}</b>
                 </span>
                 <button
                   className="ml-auto btn-secondary"
                   onClick={() => onSettle(s)}
-                  aria-label={`Record ${names[s.from]} paying ${names[s.to]}`}
+                  aria-label={`Record ${name(s.from)} paying ${name(s.to)}`}
                 >
                   Settle
                 </button>

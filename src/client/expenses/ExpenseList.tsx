@@ -3,6 +3,7 @@ import { dayLabel, listNames, money, today } from '../lib/format.ts';
 import { CATEGORY_LABEL, placeOf } from '../lib/labels.ts';
 import type { View } from '../lib/store.ts';
 import { receiver, summarize } from '../../shared/ledger.ts';
+import { everyone, isEveryone, label } from '../../shared/travellers.ts';
 import type { Entry, Trip } from '../../shared/types.ts';
 import { Icon } from '../ui/Icon.tsx';
 import { SplitBadge } from '../ui/people.tsx';
@@ -21,7 +22,7 @@ function matches(e: Entry, trip: Trip, q: string): boolean {
     e.title,
     e.note,
     CATEGORY_LABEL[e.category],
-    trip.names[e.paidBy],
+    label(trip, e.paidBy),
     e.currency,
     placeOf(e.currency, trip.home),
   ];
@@ -49,11 +50,8 @@ export function ExpenseList({
         </p>
         <p className="mt-2.5">
           The little badge on each expense shows the split:{' '}
-          <SplitBadge
-            shares={trip.names.map(() => 1)}
-            className="mx-0.5 inline-block align-[-3px]"
-          />{' '}
-          split evenly, or one colour when it's only for one of you.
+          <SplitBadge shares={everyone(trip)} className="mx-0.5 inline-block align-[-3px]" /> split
+          evenly, or one colour when it's only for one of you.
         </p>
       </div>
     );
@@ -77,12 +75,12 @@ export function ExpenseList({
       {q && (
         <p className="mx-6.5 mt-2 hint wide:mx-2.5" role="status">
           {shown.length
-            ? `${shown.length} ${shown.length === 1 ? 'match' : 'matches'} · ${money(summarize(shown, trip.names.length).spent, trip.home)} spent`
+            ? `${shown.length} ${shown.length === 1 ? 'match' : 'matches'} · ${money(summarize(shown, trip.travellers.length).spent, trip.home)} spent`
             : 'No expenses match.'}
         </p>
       )}
       {[...days].map(([date, list]) => {
-        const total = summarize(list, trip.names.length).spent;
+        const total = summarize(list, trip.travellers.length).spent;
         const places = [
           ...new Set(
             list.filter((e) => e.currency !== trip.home).map((e) => placeOf(e.currency, trip.home)),
@@ -122,7 +120,8 @@ function Row({
   pending: boolean;
   onOpen: () => void;
 }) {
-  const { names, home } = trip;
+  const { home } = trip;
+  const payer = label(trip, e.paidBy);
   const local = e.currency !== home;
   const transfer = e.kind === 'transfer';
   return (
@@ -136,11 +135,11 @@ function Row({
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="truncate text-base leading-tight font-bold">
-          {transfer ? `${names[e.paidBy]} paid ${names[receiver(e)]} back` : e.title}
+          {transfer ? `${payer} paid ${label(trip, receiver(e))} back` : e.title}
         </span>
         {e.note && <span className="truncate text-xs font-medium text-soft">{e.note}</span>}
         <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs font-semibold text-soft">
-          {transfer ? 'Settle up' : `${names[e.paidBy]} paid · ${splitTitle(e.shares, names)}`}
+          {transfer ? 'Settle up' : `${payer} paid · ${splitTitle(e.shares, trip)}`}
           {pending && (
             <span className="inline-flex items-center gap-1 rounded-pill bg-sand px-2 text-2xs font-bold text-ink">
               <Icon name="clock" size={12} /> Not synced
@@ -164,15 +163,15 @@ function Row({
   );
 }
 
-function splitTitle(shares: number[], names: string[]) {
+function splitTitle(shares: number[], trip: Trip) {
   const who = shares.flatMap((w, i) => (w ? [i] : []));
-  if (who.length === 1) return `only ${names[who[0]!]}`;
+  if (who.length === 1) return `only ${label(trip, who[0]!)}`;
   if (who.some((i) => shares[i] !== shares[who[0]!])) {
     const total = who.reduce((a, i) => a + shares[i]!, 0);
     return who.length <= 3
       ? who.map((i) => Math.round((shares[i]! / total) * 100)).join('/')
       : 'uneven split';
   }
-  if (who.length === names.length) return names.length === 2 ? 'split 50/50' : 'split evenly';
-  return `split ${listNames(who.map((i) => names[i]!))}`;
+  if (isEveryone(trip, shares)) return who.length === 2 ? 'split 50/50' : 'split evenly';
+  return `split ${listNames(who.map((i) => label(trip, i)))}`;
 }

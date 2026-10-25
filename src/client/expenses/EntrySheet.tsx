@@ -12,6 +12,7 @@ import { CATEGORY_LABEL } from '../lib/labels.ts';
 import { KEY, read, write } from '../lib/storage.ts';
 import { deleteEntry, saveEntry } from '../lib/store.ts';
 import { toHome, toMajor } from '../../shared/ledger.ts';
+import { everyone } from '../../shared/travellers.ts';
 import {
   CATEGORIES,
   type Category,
@@ -43,7 +44,7 @@ export function EntrySheet({
   rates: Record<string, number>;
   onClose: () => void;
 }) {
-  const { names, home } = trip;
+  const { home } = trip;
   const [currency, setCurrency] = useState(() => entry?.currency ?? initialCurrency(trip));
   const [amountText, setAmountText] = useState(
     entry ? majorText(entry.amount, entry.currency) : '',
@@ -53,7 +54,7 @@ export function EntrySheet({
   const [category, setCategory] = useState<Category>(entry?.category ?? 'food');
   const [paidBy, setPaidBy] = useState<Person>(entry?.paidBy ?? me);
   const [shares, setShares] = useState(() =>
-    names.map((_, i) => (entry ? (entry.shares[i] ?? 0) : 1)),
+    entry ? trip.travellers.map((_, i) => entry.shares[i] ?? 0) : everyone(trip),
   );
   const [date, setDate] = useState(entry?.date ?? today());
   const [manual, setManual] = useState(entry?.rateManual ?? false);
@@ -68,7 +69,7 @@ export function EntrySheet({
   const autoRate = rates[currency];
   const estimate = amount && local && autoRate ? toHome(amount, currency, autoRate, home) : null;
   const who = shares.filter((w) => w > 0).length;
-  const authors = entry && authorsLine(entry, names);
+  const authors = entry && authorsLine(entry, trip);
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -200,11 +201,17 @@ export function EntrySheet({
 
         <fieldset className="field">
           <legend>Paid by</legend>
-          <PersonPicker names={names} value={paidBy} onChange={setPaidBy} label="Paid by" />
+          <PersonPicker
+            trip={trip}
+            value={paidBy}
+            keep={entry ? [entry.paidBy] : []}
+            onChange={setPaidBy}
+            label="Paid by"
+          />
         </fieldset>
 
         <SplitPicker
-          names={names}
+          trip={trip}
           shares={shares}
           onChange={setShares}
           amount={amount}

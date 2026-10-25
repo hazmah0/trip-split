@@ -2,8 +2,10 @@ import { afterAll, beforeAll, expect, test, vi } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { receiver } from '../../shared/ledger.ts';
 import type { EntryInput, State, Trip } from '../../shared/types.ts';
 import { start } from '../../server/main.ts';
+import { pendingSwish, startSwish } from './swish.ts';
 
 const realFetch = globalThis.fetch;
 const storage = new Map<string, string>();
@@ -81,14 +83,14 @@ const entry = (id: string, currency: string, tripId = 't'): Omit<EntryInput, 'up
 const trip = (id: string): Omit<Trip, 'updatedAt'> => ({
   id,
   name: 'Seoul',
-  names: ['Ada', 'Bo'],
+  travellers: [{ name: 'Ada' }, { name: 'Bo' }],
   home: 'SEK',
   locals: ['KRW'],
   budget: null,
   deleted: false,
 });
 const outbox = () => Object.keys(JSON.parse(storage.get('tb:outbox2')!) as object).sort();
-const cached = () => JSON.parse(storage.get('tb:state2')!) as State;
+const cached = () => JSON.parse(storage.get('tb:state3')!) as State;
 const queued = (id: string) =>
   (JSON.parse(storage.get('tb:outbox2')!) as Record<string, EntryInput>)[id];
 
@@ -96,7 +98,7 @@ test('without a session (401), sync leaves the outbox and the cached state alone
   store.saveEntry(entry('early', 'SEK', 'old'));
   await store.sync();
   expect(outbox()).toStrictEqual(['early']);
-  expect(storage.has('tb:state2')).toBe(false);
+  expect(storage.has('tb:state3')).toBe(false);
 });
 
 test('an entry whose trip does not exist (410) is dropped once signed in', async () => {
@@ -189,4 +191,91 @@ test('saving stamps who added an entry, and an edit keeps that and stamps the ed
   store.setMe('u', 0);
   store.saveEntry({ ...entry('mine', 'SEK', 'u'), title: 'edited' });
   expect(queued('mine')).toMatchObject({ addedBy: 1, editedBy: 0 });
+});
+
+test('a Swish payment confirmed on return records the amount sent, from payer to receiver', async () => {
+  startSwish({ tripId: 'u', from: 0, to: 1, amount: 34050 });
+  const sent = pendingSwish('u')!;
+  store.recordTransfer(
+    cached().trips.find((t) => t.id === 'u')!,
+    { ...sent, date: '2026-08-02' },
+  );
+  await store.sync();
+  const paid = cached().entries.find((e) => e.kind === 'transfer')!;
+  expect(paid).toMatchObject({
+    tripId: 'u',
+    paidBy: 0,
+    amount: 34050,
+    currency: 'SEK',
+    home: 34050,
+  });
+  expect(receiver(paid)).toBe(1);
+});
+
+const cachedTrip = (id: string) => cached().trips.find((t) => t.id === id)!;
+
+test('adding and updating a traveller replaces the cached trip with the saved one', async () => {
+  await store.addTraveller('u', 'Cy');
+  expect(cachedTrip('u').travellers).toStrictEqual([
+    { name: 'Ada' },
+    { name: 'Bo' },
+    { name: 'Cy' },
+  ]);
+  await store.updateTraveller('u', { person: 1, swish: '46701234567' });
+  expect(cachedTrip('u').travellers[1]).toStrictEqual({ name: 'Bo', swish: '46701234567' });
+});
+
+test('a phone whose traveller is removed is told so, not asked who it is', async () => {
+  store.selectTrip('u');
+  store.setMe('u', 2);
+  expect(store.getView()).toMatchObject({ me: 2, meRemoved: false });
+  await store.updateTraveller('u', { person: 2, removed: true });
+  expect(store.getView()).toMatchObject({ me: null, meRemoved: true });
+  store.setMe('u', 7);
+  expect(store.getView(), 'a stored traveller past the end').toMatchObject({
+    me: null,
+    meRemoved: false,
+  });
+});
+
+test('a removed traveller is never stamped as an entry author', () => {
+  store.setMe('u', 2);
+  store.saveEntry(entry('ghost', 'SEK', 'u'));
+  expect(queued('ghost')).not.toHaveProperty('addedBy');
+});
+
+test('a phone that guessed wrong forgets who it is on that trip only, so it asks again', () => {
+  store.setMe('t', 0);
+  store.clearMe('u');
+  expect(store.getView()).toMatchObject({ me: null, meRemoved: false });
+  expect(JSON.parse(storage.get('tb:me2')!)).toStrictEqual({ t: 0 });
+});
+
+test('a sync already in flight cannot revert a traveller change', async () => {
+  await store.sync();
+  const pass = globalThis.fetch;
+  let fetched!: () => void;
+  const stale = new Promise<void>((r) => (fetched = r));
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  let holdNext = true;
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    const res = await pass(path, init);
+    if (path === '/api/state' && holdNext) {
+      holdNext = false;
+      fetched();
+      await held;
+    }
+    return res;
+  });
+  try {
+    const running = store.sync();
+    await stale;
+    await store.updateTraveller('u', { person: 0, name: 'Adele' });
+    release();
+    await running;
+    await vi.waitFor(() => expect(cachedTrip('u').travellers[0]!.name).toBe('Adele'));
+  } finally {
+    vi.stubGlobal('fetch', pass);
+  }
 });

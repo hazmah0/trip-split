@@ -5,7 +5,7 @@ import type { Entry, Trip } from '../../shared/types.ts';
 const trip: Trip = {
   id: 't',
   name: 'Korea',
-  names: ['Ada', 'Bo', 'Cy'],
+  travellers: [{ name: 'Ada' }, { name: 'Bo' }, { name: 'Cy' }],
   home: 'SEK',
   locals: ['KRW'],
   budget: null,
@@ -53,4 +53,11 @@ test('exports oldest first, quotes awkward text, and splits shares across everyo
     '2026-10-21,Expense,Bibimbap,Food,"Bo said ""never again"",\nspicy",15000,KRW,0.0074867,112.30,Ada,56.15,56.15,0.00',
     '2026-10-22,Transfer,Settle up,,,56.15,SEK,1,56.15,Bo,56.15,0.00,0.00',
   ]);
+});
+
+test('a removed traveller keeps their column and is labelled as removed', () => {
+  const gone: Trip = { ...trip, travellers: [{ name: 'Ada' }, { name: 'Bo', removed: true }] };
+  const rows = tripCsv([{ ...base, paidBy: 1 }], gone).split('\r\n');
+  expect(rows[0]).toMatch(/,Paid by,Ada share \(SEK\),Bo \(removed\) share \(SEK\)$/);
+  expect(rows[1]).toMatch(/,112\.30,Bo \(removed\),56\.15,56\.15$/);
 });

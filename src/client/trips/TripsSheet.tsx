@@ -3,6 +3,7 @@ import { JoinForm } from '../gates/Gates.tsx';
 import { dayLabel, listNames, money } from '../lib/format.ts';
 import type { View } from '../lib/store.ts';
 import { summarize } from '../../shared/ledger.ts';
+import { active, label } from '../../shared/travellers.ts';
 import { Icon } from '../ui/Icon.tsx';
 import { Sheet } from '../ui/Sheet.tsx';
 
@@ -24,7 +25,7 @@ export function TripsSheet({
         {v.trips.toReversed().map((t) => {
           const entries = v.allEntries.filter((e) => e.tripId === t.id);
           const dates = entries.map((e) => e.date).sort();
-          const { spent } = summarize(entries, t.names.length);
+          const { spent } = summarize(entries, t.travellers.length);
           const current = t.id === v.trip?.id;
           return (
             <li key={t.id}>
@@ -36,7 +37,7 @@ export function TripsSheet({
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="truncate text-base leading-tight font-bold">{t.name}</span>
                   <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs font-semibold text-soft">
-                    {listNames(t.names)}
+                    {listNames(active(t).map((p) => label(t, p)))}
                     {dates.length > 0 &&
                       ` · ${dayLabel(dates[0]!)}${dates.length > 1 ? ` – ${dayLabel(dates.at(-1)!)}` : ''}`}
                   </span>

@@ -39,9 +39,9 @@ flowchart LR
 
 | Path | Runs on | Contents |
 |---|---|---|
-| `src/shared/` | Both | `schema.ts` (Zod schemas), `types.ts` (types derived from them), `ledger.ts` (money math, balances, settlements, stats) |
+| `src/shared/` | Both | `schema.ts` (Zod schemas), `types.ts` (types derived from them), `ledger.ts` (money math, balances, settlements, stats), `travellers.ts` (who is active or removed, labels, the removal rule) |
 | `src/server/` | Node | `main.ts` (startup and shutdown), `app.ts` (middleware and route mounting), `access.ts` (login and the access gate), `trips.ts` and `entries.ts` (write rules), `state.ts` (state and rates reads), `events.ts` (SSE), `push.ts` (Web Push), `static.ts` (the built web app), `db.ts` (SQLite), `rates.ts` (exchange rates) |
-| `src/client/lib/` | Browser | `store.ts` (state, outbox, sync), `api.ts` (fetch and `HttpError`), `push.ts` (browser push subscription), `storage.ts` (`localStorage` keys), `format.ts`, `csv.ts`, `labels.ts` |
+| `src/client/lib/` | Browser | `store.ts` (state, outbox, sync), `api.ts` (fetch and `HttpError`), `push.ts` (browser push subscription), `storage.ts` (`localStorage` keys), `swish.ts` (Swish links and the pending payment), `format.ts`, `csv.ts`, `labels.ts` |
 | `public/push-sw.js` | Service worker | Push and notification-click handlers, imported by the generated `sw.js` |
 | `src/client/` other folders | Browser | React components, grouped by screen: `expenses/`, `trips/`, `stats/`, `gates/`, `ui/` |
 
@@ -49,7 +49,7 @@ The server runs from TypeScript source with Node's built-in type stripping, so t
 
 ## Data model
 
-A **trip** has an ordered list of traveller names, a home currency, zero or more local currencies and an optional budget. An **entry** is either an expense or a transfer and belongs to one trip. A traveller is not a separate record: a `Person` is an index into `trip.names`.
+A **trip** has an ordered list of travellers, a home currency, zero or more local currencies and an optional budget. An **entry** is either an expense or a transfer and belongs to one trip. A traveller is not a separate record: a `Person` is an index into `trip.travellers`.
 
 ```mermaid
 erDiagram
@@ -58,7 +58,7 @@ erDiagram
   TRIP {
     string id PK "client-generated"
     string name
-    string[] names "Person = index"
+    object[] travellers "Person = index: name, removed?, swish?"
     string home "ISO 4217, e.g. SEK"
     string[] locals "other currencies"
     int budget "home minor units, nullable"
@@ -128,14 +128,24 @@ Zod checks the shape of every write (`src/shared/schema.ts`). `trips.ts` and `en
 | `paidBy` and the `shares` array must fit the trip's traveller list | 400 |
 | An entry cannot move to a different trip | 409 |
 | A trip's home currency cannot change after the trip has entries | 409 |
-| Travellers can be added at any time, but removed only while the trip has no entries | 409 |
+| A traveller can be removed only when their balance is zero and at least two others stay | 409 |
 | New trip currencies must be published by the ECB | 400 |
 
-Removing travellers is blocked because entries refer to people by index. Removing one would shift everyone after them.
+### Traveller identity
+
+Entries refer to people by index (`paidBy`, `shares`, `addedBy`, `editedBy`), and so do each phone's "who am I" and the pending Swish payment. A traveller's index is therefore their permanent id, and the list only grows:
+
+- **Removing** a traveller sets `removed: true` and keeps them in place, so no index ever shifts. They drop out of pickers (except on an entry that already names them), "Everyone" and the "Whose phone is this?" screen, and history labels them `Name (removed)`. A trip holds up to 20 active travellers and 50 in all.
+- **The server owns the list after creation.** `PUT /api/trips/:id` sets travellers only when it creates the trip; `db.putTrip` keeps the stored list for an existing trip, so a stale form cannot drop or reorder anyone. Later changes go through `POST` and `PATCH /api/trips/:id/travellers`, and the server picks each new index, so two phones adding someone at once get two travellers. These writes do not change `updatedAt`.
+- **Removal needs a zero balance**, checked in one synchronous handler against the stored entries. Tapping Remove for someone with a balance shows the reason instead of a confirm. The trip form also disables Remove while offline or while this phone has unsynced entries for the trip, so a late sync cannot quietly unbalance someone who was just removed.
+- **No revive.** If a removed traveller's balance moves later (a late offline entry, an edit of old history), the server still accepts the entry and they stay removed. The balance card shows them with their label and amount, and Settle up offers them, so the debt can still be cleared. Restoring is an explicit action in the trip form.
+- **A removed phone** sees "You were removed from this trip" instead of the main screen, with a way to open another trip, or to forget this phone's guess and pick again.
 
 ## Sync and offline
 
 The server resolves conflicts with **last-write-wins on `updatedAt`**. The client sets `updatedAt` to `Date.now()` on every save. The server applies a write only when its `updatedAt` is newer than the stored one, all in one SQL statement (`INSERT … ON CONFLICT … WHERE excluded.updated_at > updated_at`), so two concurrent requests cannot interleave. A stale or repeated write gets the stored object back with status 200, so retries are safe.
+
+Travellers sit outside this rule. A trip save never changes them, and the traveller endpoints write them without touching `updatedAt` (see [Traveller identity](#traveller-identity)). A Swish number lives on its traveller, so a rename keeps it and a removal clears it.
 
 Entries can be saved offline. Trips can't: `saveTrip` calls the API directly, and the trip form shows an error when there is no connection.
 
@@ -241,14 +251,15 @@ The generated `sw.js` also loads `public/push-sw.js` through Workbox's `importSc
 
 | Key | Contents |
 |---|---|
-| `tb:state2` | Last server state (`{ trips, entries, invites, owner }`). A cache from before invites loads with `invites: {}` and `owner: false` until the next sync. |
+| `tb:state3` | Last server state (`{ trips, entries, invites, owner }`). A cache from before invites loads with `invites: {}` and `owner: false` until the next sync. |
 | `tb:outbox2` | Unconfirmed entries, keyed by id |
 | `tb:rates2` | Latest rates (`{ [home]: { [currency]: rate } }`) |
-| `tb:me2` | Which traveller this phone is, per trip id |
+| `tb:me2` | Which traveller this phone is, per trip id. A stored index that is missing, out of range or removed counts as unset. |
 | `tb:trip` | Selected trip id |
 | `tb:lastCurrency` | Default currency for the next expense |
+| `tb:swish` | The Swish payment this phone started (`{ tripId, from, to, amount, at }`), asked about on return and dropped after an hour |
 
-The `2` suffix marks a format change. Bump the suffix when a stored format changes incompatibly, so old data is ignored instead of misread.
+A number suffix marks a format change. Bump it when a stored format changes incompatibly, so old data is ignored instead of misread. `tb:state3` came with `trip.travellers`, and the app deletes the old `tb:state2` on start. The outbox, `tb:me2` and `tb:swish` kept their keys, because entries and traveller indices did not change, so unsynced expenses survive the update.
 
 ### Screen gates
 
@@ -262,7 +273,9 @@ flowchart TD
   trip -- "no, auth unknown" --> Splash["Splash<br/>(loading or offline)"]
   trip -- "no, auth ok, owner" --> FirstTrip
   trip -- "no, auth ok, member" --> Join["Login<br/>(paste an invite link)"]
-  trip -- yes --> me{"traveller picked<br/>on this phone?"}
+  trip -- yes --> removed{"this phone's traveller<br/>removed?"}
+  removed -- yes --> Removed["RemovedGate<br/>(open another trip<br/>or pick again)"]
+  removed -- no --> me{"traveller picked<br/>on this phone?"}
   me -- no --> WhoAmI
   me -- yes --> Main["Main<br/>expenses, stats, trip"]
 ```
@@ -282,7 +295,7 @@ The server calculates `home` when it saves an entry and stores the result. Balan
 
 ### Splitting
 
-`shares` holds one integer weight per traveller. Even split is all 1s; 2:1:1 is `[2, 1, 1]`; leaving someone out is a 0. The array can be shorter than `names`, and missing trailing weights count as 0. That is how older entries keep working after a traveller joins.
+`shares` holds one integer weight per traveller. Even split is all 1s; 2:1:1 is `[2, 1, 1]`; leaving someone out is a 0. The array can be shorter than `travellers`, and missing trailing weights count as 0. "Everyone" means every traveller who is not removed, at equal weight, so an old entry that included someone now removed reads as a named split. That is how older entries keep working after a traveller joins.
 
 `allocate(total, weights)` uses the largest-remainder method. Each person gets the floor of their exact share. The leftover minor units then go one at a time to the largest fractional parts, with ties going to the lower index. The parts always add up exactly to `total`.
 
@@ -363,7 +376,9 @@ A home-screen app on iOS keeps its own cookies, separate from Safari's. A link o
 |---|---|
 | `src/server/api.test.ts` | The real server, started on a random port with a temporary data directory. `fetch` to frankfurter is stubbed. Push tests start a second server with a fake sender passed as `start({ push })`, because `web-push` does not use `fetch`, and assert on the payloads it receives. |
 | `src/client/lib/store.test.ts` | The client store and outbox, syncing against a real server |
+| `src/server/db.test.ts` | The traveller backfill on an old-shaped `travel.db` |
 | `src/shared/ledger.test.ts` | Rounding, allocation, balances, settlements |
+| `src/shared/travellers.test.ts` | Active and removed travellers, labels, "Everyone", the removal rule |
 | `src/client/lib/*.test.ts` | Formatting and CSV export |
 
 Run them with `pnpm test`.

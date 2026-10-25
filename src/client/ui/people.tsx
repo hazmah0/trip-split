@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
-import type { Person } from '../../shared/types.ts';
+import { active, label } from '../../shared/travellers.ts';
+import type { Person, Trip } from '../../shared/types.ts';
 
 const COLOURS = 8;
 
@@ -52,25 +53,31 @@ export function SplitBadge({
   );
 }
 
+export const pickable = (trip: Trip, picked: Person[]) =>
+  [...new Set([...active(trip), ...picked])].sort((a, b) => a - b);
+
 export function PersonPicker({
-  names,
+  trip,
   value,
+  keep = [],
   onChange,
-  label,
+  label: groupLabel,
 }: {
-  names: string[];
+  trip: Trip;
   value: Person;
+  keep?: Person[];
   onChange: (p: Person) => void;
   label: string;
 }) {
-  const chips = names.length > 3;
+  const people = pickable(trip, [...keep, value]);
+  const chips = people.length > 3;
   return (
     <div
       className={chips ? 'flex flex-wrap gap-2' : 'segmented'}
       role="radiogroup"
-      aria-label={label}
+      aria-label={groupLabel}
     >
-      {names.map((n, i) => (
+      {people.map((i) => (
         <button
           type="button"
           key={i}
@@ -80,7 +87,7 @@ export function PersonPicker({
           style={personStyle(i)}
           onClick={() => onChange(i)}
         >
-          {n}
+          {label(trip, i)}
         </button>
       ))}
     </div>

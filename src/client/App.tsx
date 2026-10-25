@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { BalanceCard } from './expenses/BalanceCard.tsx';
 import { EntrySheet } from './expenses/EntrySheet.tsx';
 import { ExpenseList } from './expenses/ExpenseList.tsx';
-import { SettleSheet } from './expenses/SettleSheet.tsx';
-import { FirstTrip, Login, Splash, WhoAmI } from './gates/Gates.tsx';
+import { SettleSheet, SwishReturnSheet } from './expenses/SettleSheet.tsx';
+import { FirstTrip, Login, RemovedGate, Splash, WhoAmI } from './gates/Gates.tsx';
 import { selectTrip, useStore, type View } from './lib/store.ts';
+import { pendingSwish, type SwishPayment } from './lib/swish.ts';
 import type { Settlement } from '../shared/ledger.ts';
 import type { Entry, Person, Trip } from '../shared/types.ts';
 import { Stats } from './stats/Stats.tsx';
@@ -23,6 +24,7 @@ export function App() {
     if (v.auth === 'unknown') return <Splash online={v.online} />;
     return v.owner ? <FirstTrip /> : <Login noTrips />;
   }
+  if (v.meRemoved) return <RemovedGate trip={v.trip} />;
   if (v.me === null) return <WhoAmI trip={v.trip} />;
   return <Main v={v} trip={v.trip} me={v.me} />;
 }
@@ -31,6 +33,7 @@ type SheetState =
   | { kind: 'entry'; entry?: Entry }
   | { kind: 'settle'; entry?: Entry; settlement?: Settlement }
   | { kind: 'trips' | 'new-trip' }
+  | { kind: 'swish'; payment: SwishPayment }
   | null;
 
 function Main({ v, trip, me }: { v: View; trip: Trip; me: Person }) {
@@ -50,6 +53,15 @@ function Main({ v, trip, me }: { v: View; trip: Trip; me: Person }) {
       removeEventListener('resize', check);
     };
   }, []);
+  useEffect(() => {
+    const check = () => {
+      const payment = document.visibilityState === 'visible' && pendingSwish(trip.id);
+      if (payment) setSheet({ kind: 'swish', payment });
+    };
+    check();
+    document.addEventListener('visibilitychange', check);
+    return () => document.removeEventListener('visibilitychange', check);
+  }, [trip.id]);
 
   return (
     <div className="mx-auto min-h-dvh max-w-app pb-[calc(var(--spacing-dock)+env(safe-area-inset-bottom)+88px)] wide:grid wide:max-w-wide wide:grid-cols-[minmax(0,1.25fr)_minmax(340px,1fr)] wide:grid-rows-[auto_1fr] wide:gap-x-6 wide:px-6 wide:pb-28">
@@ -98,13 +110,15 @@ function Main({ v, trip, me }: { v: View; trip: Trip; me: Person }) {
               key={trip.id}
               trip={trip}
               me={me}
-              hasEntries={v.entries.length > 0}
+              entries={v.entries}
+              hasPending={v.pendingTrips.has(trip.id)}
+              online={v.online}
               owner={v.owner}
               onDone={() => setTab('expenses')}
             />
           </div>
-          <Invite key={trip.id} trip={trip} code={v.invite} owner={v.owner} />
-          <Notifications key={trip.id} tripId={trip.id} online={v.online} />
+          <Invite key={`invite-${trip.id}`} trip={trip} code={v.invite} owner={v.owner} />
+          <Notifications key={`push-${trip.id}`} tripId={trip.id} online={v.online} />
         </section>
       )}
 
@@ -123,8 +137,12 @@ function Main({ v, trip, me }: { v: View; trip: Trip; me: Person }) {
           settlement={sheet.settlement}
           entry={sheet.entry}
           trip={trip}
+          me={me}
           onClose={close}
         />
+      )}
+      {sheet?.kind === 'swish' && (
+        <SwishReturnSheet payment={sheet.payment} trip={trip} onClose={close} />
       )}
       {sheet?.kind === 'trips' && (
         <TripsSheet

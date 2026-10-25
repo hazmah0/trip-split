@@ -10,6 +10,8 @@ One Node service (Hono + Zod) serves both the API and the built web app, and sto
 - Pick the currency per expense. If your card charged a different amount than the ECB rate gives, enter the real amount instead.
 - Splits: evenly across everyone, a subset of people, or uneven shares (e.g. 2:1:1).
 - Settle up records a payment between you and brings the balance to zero.
+- Rename, add or remove travellers at any time. Anyone can be removed once their balance is settled; their past expenses stay with them, and they can be restored.
+- Pay with Swish on SEK trips. Swish opens with the number, amount and trip name filled in. Swish gives no confirmation, so the app asks whether the payment went through when you come back, and records it if you say yes.
 - An invite link per trip. Travellers who join with it see only that trip.
 - Stats per trip: by category, by country, day by day, and how much each of you paid versus used.
 - Works offline. Expenses added without signal wait on the phone and sync when you're back online.

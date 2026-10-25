@@ -51,6 +51,8 @@ flowchart LR
 | `GET` | `/api/rates` | Yes | Latest exchange rates for those trips |
 | `GET` | `/api/events` | Yes | A Server-Sent Events stream that names each trip as it changes |
 | `PUT` | `/api/trips/:id` | Yes | Update a trip, or create, delete or restore one (owner only) |
+| `POST` | `/api/trips/:id/travellers` | Yes | Add a traveller |
+| `PATCH` | `/api/trips/:id/travellers` | Yes | Rename, remove or restore a traveller, or set their Swish number |
 | `POST` | `/api/trips/:id/invite` | Owner | Reset the trip's invite link |
 | `PUT` | `/api/entries/:id` | Yes | Create, update or delete an entry |
 | `GET` | `/api/push/:tripId` | Yes | The push public key, and whether this device gets notifications for the trip |
@@ -124,7 +126,7 @@ The body is a full trip. The id in the path must match `id` in the body.
 {
   "id": "k3j2",
   "name": "Korea & Japan",
-  "names": ["Alex", "Sam"],
+  "travellers": [{ "name": "Alex", "swish": "46701234567" }, { "name": "Sam" }],
   "home": "SEK",
   "locals": ["KRW", "JPY"],
   "budget": 4000000,
@@ -136,7 +138,7 @@ The body is a full trip. The id in the path must match `id` in the body.
 | Field | Rule |
 |---|---|
 | `name` | Trimmed, 1–80 characters |
-| `names` | 2–20 travellers, each 1–40 characters and not blank |
+| `travellers` | Up to 50 travellers, of whom 2–20 are not removed. Each has a `name` of 1–40 characters, not blank, an optional `removed: true`, and an optional `swish` number (`467` followed by 8 digits). A traveller's index is their permanent id. The server uses this field only when it creates the trip. On an existing trip it keeps the stored travellers and ignores the body's, so change them with the [traveller endpoints](#post-apitripsidtravellers). |
 | `home`, `locals` | Three-letter uppercase codes, no duplicates across both, each published by the ECB |
 | `budget` | Non-negative integer in home minor units, or `null` |
 | `updatedAt` | Non-negative integer (ms since epoch) |
@@ -151,7 +153,53 @@ Returns 200 with the stored trip.
 | 403 | `not a member of this trip` |
 | 403 | `only the owner can delete trips`: a member changed `deleted`, either way |
 | 409 | `home currency is fixed once the trip has entries` |
-| 409 | `travellers cannot be removed once the trip has entries` |
+
+### `POST /api/trips/:id/travellers`
+
+Adds a traveller at the end of the list. The server picks the index, so two phones that add someone at the same time get two travellers.
+
+```json
+{ "name": "Kim" }
+```
+
+Returns 200 with the stored trip. The write does not change `updatedAt`, so it never wins or loses against a trip save. Each call sends a `change` event for the trip.
+
+| Status | Error |
+|---|---|
+| 400 | `invalid traveller.name` |
+| 403 | `not a member of this trip` |
+| 404 | `trip not found`: unknown or deleted |
+| 409 | `A trip can have at most 20 travellers.`: 20 are not removed |
+| 409 | `This trip has used all its traveller slots.`: the list already holds 50, counting removed travellers |
+
+### `PATCH /api/trips/:id/travellers`
+
+Changes one traveller. Send `person` and at least one of the other fields.
+
+```json
+{ "person": 1, "name": "Samuel", "removed": false, "swish": "46701234567" }
+```
+
+| Field | Rule |
+|---|---|
+| `person` | Index into the trip's `travellers` |
+| `name` | Optional. 1–40 characters, not blank. The Swish number stays. |
+| `removed` | Optional. `true` removes the traveller and clears their Swish number. `false` restores them, without the number. |
+| `swish` | Optional. `""` clears the number. Otherwise a Swedish mobile number in Swish link form, `467` followed by 8 digits. |
+
+A traveller can be removed only when their balance over the trip's live entries is exactly zero and at least two others stay. The server checks the stored entries and writes in one step, with no `await` between. An entry already on its way can still land just after the removal, which the next sentences cover. A removed traveller keeps their index. Entries that name them are still accepted, and if their balance moves later they stay removed and can still be settled.
+
+Returns 200 with the stored trip. Like adding, the write does not change `updatedAt`. A request that changes nothing returns the trip and sends no `change` event.
+
+| Status | Error |
+|---|---|
+| 400 | `invalid traveller.<field>`. `invalid traveller.person` also means `person` is past the last traveller. |
+| 403 | `not a member of this trip` |
+| 404 | `trip not found`: unknown or deleted |
+| 409 | `<name> still owes <amount>. Settle up first.` or `<name> is still owed <amount>. Settle up first.` |
+| 409 | `A trip needs at least two travellers.` |
+| 409 | `A trip can have at most 20 travellers.`: a restore would make 21 |
+| 409 | `traveller is removed`: `swish` for a removed traveller |
 
 ### `PUT /api/entries/:id`
 
@@ -187,10 +235,10 @@ The body is an entry without `home`; the server calculates `home`. The id in the
 | `amount` | Positive integer, minor units of `currency` |
 | `currency` | The trip's `home` currency or one of its `locals` |
 | `rate` | `null` to let the server look it up, or a positive number to set it by hand. Always 1 for the home currency. |
-| `paidBy` | Index into the trip's `names` |
-| `shares` | 1 to 20 integer weights from 0 to 100, at least one above 0, no longer than the trip's `names` |
-| `addedBy` | Optional. Index into the trip's `names` of who added the entry. A later write cannot change it. |
-| `editedBy` | Optional. Index into the trip's `names` of who last edited the entry |
+| `paidBy` | Index into the trip's `travellers`. A removed traveller is allowed. |
+| `shares` | 1 to 50 integer weights from 0 to 100, at least one above 0, no longer than the trip's `travellers` |
+| `addedBy` | Optional. Index into the trip's `travellers` of who added the entry. A later write cannot change it. |
+| `editedBy` | Optional. Index into the trip's `travellers` of who last edited the entry |
 | `deleted` | `true` deletes the entry. A delete needs no rate lookup. |
 
 Returns 200 with the stored entry, which includes `rate` and `home`.

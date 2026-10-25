@@ -1,5 +1,12 @@
 import { z } from 'zod';
-import { CATEGORIES, CURRENCY_CODE, MAX_PEOPLE } from './types.ts';
+import {
+  CATEGORIES,
+  CURRENCY_CODE,
+  MAX_PEOPLE,
+  MAX_SLOTS,
+  MIN_ACTIVE,
+  SWISH_NUMBER,
+} from './types.ts';
 
 const currency = z.string().regex(CURRENCY_CODE);
 const person = z
@@ -11,13 +18,26 @@ const cookieSafeId = z.string().regex(/^[\w-]{1,64}$/);
 const traveller = z
   .int()
   .min(0)
-  .max(MAX_PEOPLE - 1);
+  .max(MAX_SLOTS - 1);
+const swishNumber = z.union([z.literal(''), z.string().regex(SWISH_NUMBER)]);
+
+export const TravellerSchema = z.object({
+  name: person,
+  removed: z.literal(true).optional(),
+  swish: z.string().regex(SWISH_NUMBER).optional(),
+});
 
 export const TripSchema = z
   .object({
     id: cookieSafeId,
     name: z.string().trim().min(1).max(80),
-    names: z.array(person).min(2).max(MAX_PEOPLE),
+    travellers: z
+      .array(TravellerSchema)
+      .max(MAX_SLOTS)
+      .refine((ts) => {
+        const n = ts.filter((t) => !t.removed).length;
+        return n >= MIN_ACTIVE && n <= MAX_PEOPLE;
+      }),
     home: currency,
     locals: z.array(currency),
     budget: nonNegative.nullable(),
@@ -25,6 +45,17 @@ export const TripSchema = z
     deleted: z.boolean(),
   })
   .refine((t) => new Set([t.home, ...t.locals]).size === t.locals.length + 1, { path: ['locals'] });
+
+export const TravellerAddSchema = z.object({ name: person });
+
+export const TravellerPatchSchema = z
+  .object({
+    person: traveller,
+    name: person.optional(),
+    removed: z.boolean().optional(),
+    swish: swishNumber.optional(),
+  })
+  .refine((p) => p.name !== undefined || p.removed !== undefined || p.swish !== undefined);
 
 export const EntryInputSchema = z.object({
   id: z.string(),
@@ -42,7 +73,7 @@ export const EntryInputSchema = z.object({
   shares: z
     .array(z.int().min(0).max(100))
     .min(1)
-    .max(MAX_PEOPLE)
+    .max(MAX_SLOTS)
     .refine((s) => s.some((w) => w > 0)),
   addedBy: traveller.optional(),
   editedBy: traveller.optional(),

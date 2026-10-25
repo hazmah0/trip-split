@@ -7,17 +7,26 @@ export const readJson = (c: Context) =>
     throw new HTTPException(400, { message: 'invalid JSON' });
   });
 
-export function parse<T extends z.ZodType<{ id: string }>>(
+export function parseBody<T extends z.ZodType>(
   what: string,
   schema: T,
   body: unknown,
-  id: string,
 ): z.output<T> {
   const r = schema.safeParse(body);
   if (!r.success)
     throw new HTTPException(400, {
       message: `invalid ${what}.${String(r.error.issues[0]!.path[0] ?? 'body')}`,
     });
-  if (r.data.id !== id) throw new HTTPException(400, { message: `invalid ${what}.id` });
   return r.data;
+}
+
+export function parse<T extends z.ZodType<{ id: string }>>(
+  what: string,
+  schema: T,
+  body: unknown,
+  id: string,
+): z.output<T> {
+  const data = parseBody(what, schema, body);
+  if (data.id !== id) throw new HTTPException(400, { message: `invalid ${what}.id` });
+  return data;
 }

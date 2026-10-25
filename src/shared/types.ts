@@ -1,11 +1,23 @@
 import type { z } from 'zod';
-import type { EntryInputSchema, PushSubscriptionSchema, TripSchema } from './schema.ts';
+import type {
+  EntryInputSchema,
+  PushSubscriptionSchema,
+  TravellerPatchSchema,
+  TravellerSchema,
+  TripSchema,
+} from './schema.ts';
 
 export type Person = number;
 
 export const MAX_PEOPLE = 20;
 
+export const MAX_SLOTS = 50;
+
+export const MIN_ACTIVE = 2;
+
 export const CURRENCY_CODE = /^[A-Z]{3}$/;
+
+export const SWISH_NUMBER = /^467\d{8}$/;
 
 export const CATEGORIES = [
   'food',
@@ -26,6 +38,10 @@ export const CATEGORIES = [
 export type Category = (typeof CATEGORIES)[number];
 
 export type Trip = z.infer<typeof TripSchema>;
+
+export type Traveller = z.infer<typeof TravellerSchema>;
+
+export type TravellerPatch = z.infer<typeof TravellerPatchSchema>;
 
 export type EntryInput = z.infer<typeof EntryInputSchema>;
 

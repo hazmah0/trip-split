@@ -1,9 +1,18 @@
 import { useSyncExternalStore } from 'react';
-import { toHome } from '../../shared/ledger.ts';
+import { toHome, transferShares } from '../../shared/ledger.ts';
+import { isRemoved, validMe } from '../../shared/travellers.ts';
 import { TRIP_GONE } from '../../shared/types.ts';
-import type { Entry, EntryInput, Person, Rates, State, Trip } from '../../shared/types.ts';
+import type {
+  Entry,
+  EntryInput,
+  Person,
+  Rates,
+  State,
+  TravellerPatch,
+  Trip,
+} from '../../shared/types.ts';
 import { HttpError, request } from './api.ts';
-import { KEY, read, write } from './storage.ts';
+import { KEY, read, remove, write } from './storage.ts';
 
 export type View = {
   auth: 'unknown' | 'ok' | 'login';
@@ -14,8 +23,10 @@ export type View = {
   allEntries: Entry[];
   entries: Entry[];
   pending: Set<string>;
+  pendingTrips: Set<string>;
   rates: Record<string, number>;
   me: Person | null;
+  meRemoved: boolean;
   owner: boolean;
   invite: string | null;
   joinFailed: boolean;
@@ -30,6 +41,7 @@ function readCachedState(): State {
 }
 
 let server: State = readCachedState();
+remove('tb:state2');
 let outbox: Record<string, EntryInput> = read(KEY.outbox, {});
 let rates: Rates = read(KEY.rates, {});
 let me: Record<string, Person> = read(KEY.me, {});
@@ -68,8 +80,10 @@ function compute(): View {
     allEntries,
     entries: trip ? allEntries.filter((e) => e.tripId === trip.id) : [],
     pending: new Set(visibleOutbox.map((i) => i.id)),
+    pendingTrips: new Set(visibleOutbox.map((i) => i.tripId)),
     rates: (trip && rates[trip.home]) || {},
-    me: trip ? (me[trip.id] ?? null) : null,
+    me: trip ? validMe(trip, me[trip.id]) : null,
+    meRemoved: !!trip && me[trip.id] !== undefined && isRemoved(trip, me[trip.id]!),
     owner: server.owner,
     invite: (trip && server.invites[trip.id]) ?? null,
     joinFailed,
@@ -81,11 +95,10 @@ function emit() {
   for (const l of listeners) l();
 }
 
+export const getView = () => view;
+
 export function useStore(): View {
-  return useSyncExternalStore(
-    (l) => (listeners.add(l), () => listeners.delete(l)),
-    () => view,
-  );
+  return useSyncExternalStore((l) => (listeners.add(l), () => listeners.delete(l)), getView);
 }
 
 async function api<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -165,7 +178,8 @@ export function sync(): Promise<void> {
 
 export function saveEntry(input: Omit<EntryInput, 'updatedAt'>) {
   const prev = outbox[input.id] ?? server.entries.find((e) => e.id === input.id);
-  const author = me[input.tripId];
+  const trip = server.trips.find((t) => t.id === input.tripId);
+  const author = (trip && validMe(trip, me[input.tripId])) ?? undefined;
   outbox[input.id] = {
     ...input,
     ...(prev ? { addedBy: prev.addedBy, editedBy: author } : { addedBy: author }),
@@ -174,6 +188,29 @@ export function saveEntry(input: Omit<EntryInput, 'updatedAt'>) {
   write(KEY.outbox, outbox);
   emit();
   void sync();
+}
+
+type Transfer = { from: Person; to: Person; amount: number; date: string; id?: string };
+
+export function recordTransfer(
+  trip: Trip,
+  { from, to, amount, date, id = crypto.randomUUID() }: Transfer,
+) {
+  saveEntry({
+    id,
+    tripId: trip.id,
+    kind: 'transfer',
+    date,
+    title: 'Settle up',
+    category: 'other',
+    amount,
+    currency: trip.home,
+    rate: 1,
+    rateManual: false,
+    paidBy: from,
+    shares: transferShares(to),
+    deleted: false,
+  });
 }
 
 export function deleteEntry(entry: Entry) {
@@ -192,6 +229,23 @@ export async function saveTrip(trip: Omit<Trip, 'updatedAt'>) {
   if (!saved.deleted) selectTrip(saved.id);
   else emit();
   void sync();
+}
+
+function replaceTrip(saved: Trip) {
+  server = { ...server, trips: server.trips.map((t) => (t.id === saved.id ? saved : t)) };
+  write(KEY.state, server);
+  emit();
+  void sync();
+}
+
+const travellersPath = (id: string) => `/api/trips/${encodeURIComponent(id)}/travellers`;
+
+export async function addTraveller(id: string, name: string) {
+  replaceTrip(await api<Trip>('POST', travellersPath(id), { name }));
+}
+
+export async function updateTraveller(id: string, patch: TravellerPatch) {
+  replaceTrip(await api<Trip>('PATCH', travellersPath(id), patch));
 }
 
 export function selectTrip(id: string) {
@@ -252,6 +306,13 @@ export async function rotateInvite(id: string) {
 
 export function setMe(trip: string, p: Person) {
   me = { ...me, [trip]: p };
+  write(KEY.me, me);
+  emit();
+}
+
+export function clearMe(trip: string) {
+  const { [trip]: _gone, ...rest } = me;
+  me = rest;
   write(KEY.me, me);
   emit();
 }

@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import webpush from 'web-push';
+import { transferShares } from '../shared/ledger.ts';
 import type { EntryInput, State, Trip } from '../shared/types.ts';
 import { start } from './main.ts';
 import { pushFromEnv } from './push.ts';
@@ -74,10 +75,11 @@ const signIn = async (code: string) => {
   };
 };
 
+const people = (...names: string[]) => names.map((name) => ({ name }));
 const trip = (p: Partial<Trip> = {}): Trip => ({
   id: 'a',
   name: 'Korea & Japan',
-  names: ['Ada', 'Bo'],
+  travellers: people('Ada', 'Bo'),
   home: 'SEK',
   locals: ['KRW', 'JPY'],
   budget: 5000000,
@@ -253,14 +255,17 @@ test('invalid input is rejected with 400', async () => {
     { id: 'other' },
     { name: '   ' },
     { name: 'x'.repeat(81) },
-    { names: ['Ada', ''] },
-    { names: ['Ada'] },
+    { travellers: people('Ada', '') },
+    { travellers: people('Ada') },
+    { travellers: [{ name: 'Ada' }, { name: 'Bo', removed: true }] },
+    { travellers: people(...Array.from({ length: 21 }, (_, i) => `P${i}`)) },
     { home: 'sek' },
     { locals: ['SEK'] },
     { locals: ['KRW', 'KRW'] },
     { budget: -1 },
     { updatedAt: 1.5 },
     { deleted: 'no' as never },
+    { travellers: [{ name: 'Ada', swish: '0701234567' }, { name: 'Bo' }] },
   ];
   for (const c of tripCases) {
     const res = await api('/api/trips/bad', 'PUT', trip({ id: 'bad', ...c }));
@@ -381,7 +386,7 @@ test('a group trip takes entries paid by and split across any traveller', async 
   await api(
     '/api/trips/g',
     'PUT',
-    trip({ id: 'g', name: 'Tokyo crew', names: ['Ada', 'Bo', 'Cy', 'Di'] }),
+    trip({ id: 'g', name: 'Tokyo crew', travellers: people('Ada', 'Bo', 'Cy', 'Di') }),
   );
   const res = await api(
     '/api/entries/g1',
@@ -395,23 +400,166 @@ test('a group trip takes entries paid by and split across any traveller', async 
   ).toBe(400);
 });
 
-test('travellers can be added any time, but removed only while the trip has no entries', async () => {
-  const grow = await api(
-    '/api/trips/g',
+const crew = (p: Partial<Trip> = {}) =>
+  trip({ id: 'tr', name: 'Crew', travellers: people('Ada', 'Bo', 'Cy'), locals: [], ...p });
+const travellersOf = async (id = 'tr') =>
+  (await state()).trips.find((t) => t.id === id)!.travellers;
+const addTraveller = (name: string, id = 'tr') =>
+  api(`/api/trips/${id}/travellers`, 'POST', { name });
+const patchTraveller = (body: object, id = 'tr') =>
+  api(`/api/trips/${id}/travellers`, 'PATCH', body);
+const settle = (id: string, from: number, to: number, amount: number) =>
+  api(
+    `/api/entries/${id}`,
     'PUT',
-    trip({ id: 'g', name: 'Tokyo crew', names: ['Ada', 'Bo', 'Cy', 'Di', 'Ed'], updatedAt: 1001 }),
+    entry({
+      id,
+      tripId: 'tr',
+      kind: 'transfer',
+      currency: 'SEK',
+      amount,
+      paidBy: from,
+      shares: transferShares(to),
+    }),
   );
-  expect(grow.status).toBe(200);
-  const shrink = await api(
-    '/api/trips/g',
+
+test('adding a traveller appends them, so two adds never share a spot', async () => {
+  await api('/api/trips/tr', 'PUT', crew());
+  const res = await addTraveller('Di');
+  expect(res.status).toBe(200);
+  expect(((await res.json()) as Trip).travellers).toStrictEqual(people('Ada', 'Bo', 'Cy', 'Di'));
+  await addTraveller('Ed');
+  expect(await travellersOf()).toStrictEqual(people('Ada', 'Bo', 'Cy', 'Di', 'Ed'));
+  expect((await addTraveller('')).status).toBe(400);
+  expect((await addTraveller('Zed', 'nope')).status).toBe(404);
+});
+
+test('a trip save never changes travellers, so a stale list cannot drop or reorder anyone', async () => {
+  const res = await api(
+    '/api/trips/tr',
     'PUT',
-    trip({ id: 'g', name: 'Tokyo crew', names: ['Ada', 'Bo', 'Cy', 'Di'], updatedAt: 1002 }),
+    crew({ name: 'Crew 2', travellers: people('Cy', 'Ada'), updatedAt: 1001 }),
   );
-  expect(shrink.status).toBe(409);
-  await api('/api/trips/h', 'PUT', trip({ id: 'h', name: 'Empty', names: ['Ada', 'Bo', 'Cy'] }));
-  expect(
-    (await api('/api/trips/h', 'PUT', trip({ id: 'h', name: 'Empty', updatedAt: 1001 }))).status,
-  ).toBe(200);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({
+    name: 'Crew 2',
+    travellers: people('Ada', 'Bo', 'Cy', 'Di', 'Ed'),
+  });
+});
+
+test('a traveller change keeps the trip version, so the next trip save from a phone still lands', async () => {
+  const before = (await state()).trips.find((t) => t.id === 'tr')!.updatedAt;
+  await patchTraveller({ person: 4, name: 'Eddie' });
+  expect((await state()).trips.find((t) => t.id === 'tr')!.updatedAt).toBe(before);
+  const res = await api('/api/trips/tr', 'PUT', crew({ name: 'Crew 2', updatedAt: before + 1 }));
+  expect(((await res.json()) as Trip).updatedAt).toBe(before + 1);
+  await patchTraveller({ person: 4, name: 'Ed' });
+});
+
+test('a rename keeps the Swish number', async () => {
+  expect((await patchTraveller({ person: 1, swish: '46701740605' })).status).toBe(200);
+  const res = await patchTraveller({ person: 1, name: 'Bob' });
+  expect(res.status).toBe(200);
+  expect(((await res.json()) as Trip).travellers[1]).toStrictEqual({
+    name: 'Bob',
+    swish: '46701740605',
+  });
+  await patchTraveller({ person: 1, swish: '' });
+  expect((await travellersOf())[1], 'an empty number clears it').toStrictEqual({ name: 'Bob' });
+  await patchTraveller({ person: 1, swish: '46701740605' });
+});
+
+test('removing someone needs their balance settled, and drops their Swish number', async () => {
+  await api(
+    '/api/entries/tr1',
+    'PUT',
+    entry({ id: 'tr1', tripId: 'tr', currency: 'SEK', amount: 30000, shares: [1, 1, 1] }),
+  );
+  const owes = await patchTraveller({ person: 1, removed: true });
+  expect(owes.status).toBe(409);
+  expect((await owes.json()).error).toBe('Bob still owes 100.00 SEK. Settle up first.');
+  const owed = await patchTraveller({ person: 0, removed: true });
+  expect((await owed.json()).error).toBe('Ada is still owed 200.00 SEK. Settle up first.');
+
+  await settle('tr2', 1, 0, 10000);
+  const res = await patchTraveller({ person: 1, removed: true });
+  expect(res.status).toBe(200);
+  expect(((await res.json()) as Trip).travellers[1]).toStrictEqual({ name: 'Bob', removed: true });
+  const again = await patchTraveller({ person: 1, removed: true });
+  expect(again.status, 'repeating a removal is a no-op').toBe(200);
+  expect(((await again.json()) as Trip).travellers[1]).toStrictEqual({
+    name: 'Bob',
+    removed: true,
+  });
+});
+
+test('a trip keeps at least two travellers', async () => {
+  await api('/api/trips/duo', 'PUT', trip({ id: 'duo', name: 'Duo', locals: [] }));
+  const res = await patchTraveller({ person: 0, removed: true }, 'duo');
+  expect(res.status).toBe(409);
+  expect((await res.json()).error).toBe('A trip needs at least two travellers.');
+});
+
+test('an entry naming a removed traveller is accepted, and they stay removed', async () => {
+  const res = await api(
+    '/api/entries/tr3',
+    'PUT',
+    entry({ id: 'tr3', tripId: 'tr', currency: 'SEK', paidBy: 1, shares: [1, 1, 1] }),
+  );
+  expect(res.status).toBe(200);
+  expect((await travellersOf())[1]).toStrictEqual({ name: 'Bob', removed: true });
+});
+
+test('a restore brings the traveller back without their Swish number', async () => {
+  const res = await patchTraveller({ person: 1, removed: false });
+  expect(res.status).toBe(200);
+  expect(((await res.json()) as Trip).travellers[1]).toStrictEqual({ name: 'Bob' });
+});
+
+test('traveller updates reject a removed, unknown or missing traveller', async () => {
+  expect((await patchTraveller({ person: 3, removed: true })).status).toBe(200);
+  const swish = await patchTraveller({ person: 3, swish: '46701740605' });
+  expect(swish.status).toBe(409);
+  expect((await swish.json()).error).toBe('traveller is removed');
+  expect((await patchTraveller({ person: 5, name: 'Fi' })).status, 'past the end').toBe(400);
+  expect((await patchTraveller({ person: 0 })).status, 'nothing to change').toBe(400);
+  expect((await patchTraveller({ person: 0, swish: '0701234567' })).status).toBe(400);
+  expect((await patchTraveller({ person: 0, name: 'Ada' }, 'nope')).status).toBe(404);
+  expect((await addTraveller('Fi', 'gone')).status, 'a deleted trip').toBe(404);
+});
+
+test('a trip holds at most 20 active travellers', async () => {
+  await api(
+    '/api/trips/big',
+    'PUT',
+    trip({
+      id: 'big',
+      name: 'Big',
+      locals: [],
+      travellers: [
+        ...people(...Array.from({ length: 20 }, (_, i) => `P${i}`)),
+        { name: 'Gone', removed: true },
+      ],
+    }),
+  );
+  const add = await addTraveller('P20', 'big');
+  expect(add.status).toBe(409);
+  expect((await add.json()).error).toBe('A trip can have at most 20 travellers.');
+  const restore = await patchTraveller({ person: 20, removed: false }, 'big');
+  expect(restore.status).toBe(409);
+  expect((await restore.json()).error).toBe('A trip can have at most 20 travellers.');
+});
+
+test('a trip whose 50 slots are used, mostly by removed travellers, takes no one new', async () => {
+  const gone = Array.from({ length: 48 }, (_, i) => ({ name: `G${i}`, removed: true as const }));
+  await api(
+    '/api/trips/full',
+    'PUT',
+    trip({ id: 'full', name: 'Full', locals: [], travellers: [...people('Ada', 'Bo'), ...gone] }),
+  );
+  const res = await addTraveller('Cy', 'full');
+  expect(res.status).toBe(409);
+  expect((await res.json()).error).toBe('This trip has used all its traveller slots.');
 });
 
 test('rate lookup falls back to the cache, and fails with 502 when nothing is cached', async () => {
@@ -478,6 +626,11 @@ test('a member writes only their own trip: other, new and deleted trips are 403'
   expect(echo.status).toBe(403);
   expect(await echo.json(), 'no echo of the stored entry').not.toHaveProperty('id');
   expect((await call(member, '/api/trips/n1', 'PUT', trip({ id: 'n1' }))).status).toBe(403);
+  const add = await call(member, '/api/trips/tr/travellers', 'POST', { name: 'Mo' });
+  expect(add.status).toBe(403);
+  const patch = await call(member, '/api/trips/tr/travellers', 'PATCH', { person: 0, name: 'Mo' });
+  expect(patch.status).toBe(403);
+  expect((await travellersOf())[0]!.name).toBe('Ada');
   const undelete = trip({ id: 'gone', updatedAt: 5000 });
   expect((await call(member, '/api/trips/gone', 'PUT', undelete)).status).toBe(403);
   expect((await state()).trips.map((t) => t.id)).not.toContain('n1');
@@ -579,6 +732,21 @@ test('events: a member hears about changes to their trip only, the owner hears a
     expect(await traveller.nextChange(), 'then their stream ends').toBeNull();
   } finally {
     await Promise.all([owner.close(), traveller.close()]);
+  }
+});
+
+test('events: adding or changing a traveller is announced, a no-op change is not', async () => {
+  const owner = await subscribe(cookie);
+  try {
+    await addTraveller('Fy');
+    expect(await owner.nextChange()).toBe('tr');
+    await patchTraveller({ person: 0, name: 'Ada' });
+    await patchTraveller({ person: 0, name: 'Adah' });
+    expect(await owner.nextChange(), 'the no-op rename sent nothing').toBe('tr');
+    await api('/api/trips/live2', 'PUT', trip({ id: 'live2', locals: [], updatedAt: 1002 }));
+    expect(await owner.nextChange(), 'only one change for the two renames').toBe('live2');
+  } finally {
+    await owner.close();
   }
 });
 
@@ -720,7 +888,12 @@ describe('push notifications', () => {
       },
     });
     owner = await logIn('pw');
-    const seoul = trip({ id: 'p', name: 'Seoul', names: ['Ada', 'Bo', 'Cy'], locals: ['KRW'] });
+    const seoul = trip({
+      id: 'p',
+      name: 'Seoul',
+      travellers: people('Ada', 'Bo', 'Cy'),
+      locals: ['KRW'],
+    });
     await req(owner, '/api/trips/p', 'PUT', seoul);
     await req(owner, '/api/trips/q', 'PUT', trip({ id: 'q', name: 'Elsewhere', locals: [] }));
     const code = ((await (await req(owner, '/api/state')).json()) as State).invites.p!;
@@ -837,6 +1010,13 @@ describe('push notifications', () => {
       key: 'test-key',
       on: false,
     });
+  });
+
+  test('a removed payer is named as removed', async () => {
+    await req(owner, '/api/trips/p/travellers', 'POST', { name: 'Di' });
+    await req(owner, '/api/trips/p/travellers', 'PATCH', { person: 3, removed: true });
+    await save(withoutDevice(owner), { id: 'rm1', title: 'Late', paidBy: 3, shares: [1, 1, 1, 1] });
+    expect(await drain(1)).toStrictEqual([note('A', 'Di (removed) paid 45 SEK for Late')]);
   });
 
   test('a settle-up payment names who got paid', async () => {
